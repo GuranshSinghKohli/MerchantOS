@@ -10,7 +10,7 @@ MerchantOS must be a real Shopify app. Shopify currently documents REST Admin AP
 
 ## Decision
 
-All Shopify Admin reads and writes go through a typed GraphQL client behind `ShopifyPort`. Pin API version **2026-07** and re-validate at the OAuth implementation phase.
+All Shopify Admin reads and writes go through a typed GraphQL client behind `ShopifyPort`. Pin API version **2026-07**. Re-validated at Phase 2 OAuth (2026-08-25) against GraphQL Admin `2026-07` and https://shopify.dev/docs/api/usage/access-scopes.
 
 ## Alternatives
 

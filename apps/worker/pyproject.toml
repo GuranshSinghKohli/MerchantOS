@@ -1,13 +1,18 @@
 [project]
 name = "merchantos-worker"
 version = "0.1.0"
-description = "MerchantOS worker process (idle in Phase 1)"
+description = "MerchantOS worker process (sync and webhook handlers)"
 requires-python = ">=3.12"
 dependencies = [
     "merchantos-domain",
     "merchantos-observability",
+    "merchantos-app",
     "merchantos-db",
     "merchantos-queue",
+    "merchantos-shopify",
+    "merchantos-llm",
+    "merchantos-mcp",
+    "merchantos-agents",
     "pydantic-settings>=2.6",
     "redis>=5.2",
 ]
@@ -22,5 +27,10 @@ packages = ["src/merchantos_worker"]
 [tool.uv.sources]
 merchantos-domain = { workspace = true }
 merchantos-observability = { workspace = true }
+merchantos-app = { workspace = true }
 merchantos-db = { workspace = true }
 merchantos-queue = { workspace = true }
+merchantos-shopify = { workspace = true }
+merchantos-llm = { workspace = true }
+merchantos-mcp = { workspace = true }
+merchantos-agents = { workspace = true }

@@ -2,7 +2,7 @@
 
 **Status:** Accepted for V1 planning  
 **Sources:** [SYSTEM_DESIGN.md](../SYSTEM_DESIGN.md), PRD v1.0, [contracts.md](contracts.md)  
-**Last updated:** 2026-08-25 (Phase 1 verified)
+**Last updated:** 2026-08-26 (Phase 6 LangGraph agent runtime)
 
 MerchantOS is an AI-native commerce operating system for Shopify merchants. It is a real Shopify application, not a chatbot, analytics clone, or Shopify Admin replacement.
 
@@ -16,6 +16,7 @@ This document is the system overview. Detailed contracts live in sibling docs:
 - [evaluation.md](evaluation.md)
 - [contracts.md](contracts.md)
 - [architecture-remediation.md](architecture-remediation.md)
+- [metrics.md](metrics.md)
 - [adr/](adr/)
 
 ## 1. Current repository audit
@@ -177,7 +178,7 @@ Offline access tokens are used for webhooks, sync, and execution. Tokens are env
 3. HTTP: `TenantContext.from_session`. Async: `TenantContext.from_job_row` after loading `job_id` ([ADR 0014](adr/0014-tenant-from-job-row.md)).
 4. Tools receive that context from the runtime. Model-supplied tenant IDs, tool args, and queue bodies cannot construct `TenantContext`.
 5. Repositories require `TenantContext` and add `merchant_id` to every query.
-6. PostgreSQL RLS (`SET LOCAL app.current_merchant_id`) is defense in depth.
+6. PostgreSQL RLS (`SET LOCAL app.current_merchant_id`, `ENABLE` + `FORCE`) is defense in depth for a non-`BYPASSRLS` role. Compose owner is a superuser and bypasses policies ([ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)).
 
 Details: [security.md](security.md), [ADR 0009](adr/0009-server-injected-tenant-context.md).
 
@@ -217,7 +218,15 @@ Errors: RFC 7807 `application/problem+json`.
 | GET | `/api/v1/me` | session | Actor + store |
 | GET | `/api/v1/store/sync` | session | Sync status |
 | POST | `/api/v1/store/sync` | session | Enqueue sync |
-| GET | `/api/v1/overview` | session | Health + KPIs |
+| GET | `/api/v1/overview` | session | Dashboard KPIs (alias of analytics overview) |
+| GET | `/api/v1/analytics/overview` | session | KPIs, trends, health, opportunities |
+| GET | `/api/v1/analytics/revenue` | session | Revenue + trend |
+| GET | `/api/v1/analytics/orders` | session | Orders + exclusions |
+| GET | `/api/v1/analytics/products` | session | Product performance page |
+| GET | `/api/v1/analytics/inventory` | session | Inventory coverage |
+| GET | `/api/v1/analytics/customers` | session | New / returning (no emails) |
+| GET | `/api/v1/analytics/health` | session | Deterministic health indicator |
+| GET | `/api/v1/analytics/opportunities` | session | Rule-based opportunities |
 | POST | `/api/v1/ask` | session | Enqueue agent run |
 | GET | `/api/v1/ask/{run_id}` | session | Poll run |
 | GET | `/api/v1/insights` | session | Findings |
@@ -234,11 +243,24 @@ Errors: RFC 7807 `application/problem+json`.
 
 ## 10. Frontend
 
-Next.js App Router, TypeScript, Tailwind. Server Components for first paint. TanStack Query (or equivalent) only when polling runs.
+Approved stack ([ADR 0019](adr/0019-frontend-ui-stack.md)). Do not add alternative UI, animation, chart, client-state, or CSS libraries.
 
-Routes: `/`, `/ask`, `/ask/[runId]`, `/insights`, `/approvals`, `/approvals/[id]`, `/actions`, `/runs`, `/settings`.
+| Layer | Choice |
+|-------|--------|
+| Core | Next.js App Router, React, TypeScript, Tailwind CSS **3.4** |
+| UI | shadcn/ui (New York, copy-in), Lucide, Sonner, next-themes |
+| Animation | Motion — page/layout/entrance/hover-tap only; honor `prefers-reduced-motion` |
+| Data / presentation | TanStack Query (client polling only), TanStack Table v8, Recharts |
+| Forms | React Hook Form + Zod |
+| Utilities | date-fns, clsx, tailwind-merge, class-variance-authority |
 
-The web app talks only to MerchantOS `/api/v1`.
+Server Components for first paint. TanStack Query loads analytics (query keys include filter state; tenant comes from the session cookie, never the client). Light and dark via next-themes.
+
+Design direction: premium production B2B (Shopify Admin, Linear, Vercel). Prioritize hierarchy, typography, responsive layout, accessibility, subtle motion, and polished loading/empty/error states. No dashboard screens in this ADR — Phase 4 implements routes.
+
+Phase 4 routes: `/`, `/analytics`, `/products`, `/inventory`, `/customers`, `/insights`, `/actions` (placeholder), `/settings`, `/install`. Ask/approvals/runs wait for later phases.
+
+The web app talks only to MerchantOS `/api/v1`. It never calls Shopify.
 
 ## 11. Agents and MCP
 
@@ -276,7 +298,7 @@ Every important operation carries `request_id`, `trace_id`, `agent_run_id`, `too
 
 ## 16. Phase 1
 
-**Status:** Implemented and verified 2026-08-25. Closed. Do not start Phase 2 from this document.
+**Status:** Implemented and verified 2026-08-25. Closed.
 
 Implemented as the engineering foundation:
 
@@ -309,3 +331,161 @@ The Next.js skeleton is a scope expansion from the original “web starts at Ove
 Integration tests fail if `DATABASE_URL` is set and Compose is down; they do not skip. Docker Desktop’s CLI may be absent from PATH — see [README](../README.md).
 
 Non-blocking: ElasticMQ Compose healthcheck is a no-op (`true`); application probes proved connectivity. `next lint` and Starlette TestClient emit deprecation warnings.
+
+## 17. Phase 2
+
+**Status:** Implemented 2026-08-25. Closed. Shopify OAuth install/uninstall only.
+
+- `packages/shopify`: standalone authorization-code grant, callback HMAC, shop-domain allowlist, AES-256-GCM token envelope, GraphQL Admin client pinned to **2026-07**
+- `GET /api/v1/auth/shopify/install` and `/callback`
+- `POST /api/v1/webhooks/shopify/{topic}` (`app/uninstalled` + GDPR ACK)
+- `GET /api/v1/me` and `/api/v1/settings` (session cookie; no tokens)
+- Tables: merchants, stores, merchant_users, sessions, shopify_credentials, oauth_states, webhook_events, audit_events
+- Scopes: read-only V1 set; no write scopes until the demo mutation is locked
+- `shopify.app.toml`: `embedded = false`, mandatory compliance webhooks
+
+Out of Phase 2: product/order/customer/inventory sync, MCP, agents, LLM, mutations, Terraform.
+
+## 18. Phase 3
+
+**Status:** Closed 2026-08-26. Shopify data ingestion and commerce webhooks. Do not start Phase 4 from this document.
+
+```
+Shopify GraphQL Admin 2026-07
+  → SyncService (session) writes sync_jobs + outbox (one transaction)
+  → publisher → SQS {job_kind, job_id}
+  → SyncCapabilities worker (ShopifyReader only)
+  → tenant-scoped PostgreSQL upsert
+
+Shopify webhook
+  → HMAC + skew
+  → persist event_id (duplicate → 200)
+  → outbox job_kind=webhook
+  → ACK
+  → WebhookCapabilities worker upserts/deletes projection
+```
+
+Implemented:
+
+- Commerce tables with `UNIQUE(merchant_id, shopify_gid)`, FKs, tenant indexes, RLS `ENABLE` + `FORCE`
+- `POST /api/v1/store/sync` (`202`) and `GET /api/v1/store/sync`
+- Initial + incremental sync (`updated_at:>'…'` official search syntax)
+- Cursor pagination (`pageInfo.hasNextPage` / `endCursor`)
+- GraphQL cost throttle + HTTP 429 / `THROTTLED` backoff
+- Idempotent upserts; webhook `event_id` uniqueness
+- Capability-isolated worker: `SyncCapabilities` / `WebhookCapabilities` (no mutator, no LLM)
+- Agents/MCP/recommendations/mutations are out of scope
+
+Official queries used (2026-07): `products`, `orders`, `customers`, `locations` (`includeInactive`), `productVariants` + `inventoryLevels.quantities(names: ["available", "on_hand"])`, plus `product` / `order` / `customer` / `location` by id for webhook refresh.
+
+Out of Phase 3: MCP, LangGraph, LLM, recommendations, Shopify mutations.
+
+## 19. Phase 4
+
+**Status:** Closed 2026-08-26. Merchant data platform and dashboard. Do not start Phase 5 from this section.
+
+```
+Shopify projection (Postgres)
+  → AnalyticsRepository (SQL aggregates + TenantContext)
+  → AnalyticsService (deterministic AOV, growth, health, opportunities)
+  → GET /api/v1/analytics/*
+  → TanStack Query
+  → Next.js dashboard
+```
+
+No LLM, MCP, agents, or Shopify mutations. Metric definitions: [metrics.md](metrics.md). On-read aggregation: [ADR 0020](adr/0020-analytics-on-read.md).
+
+### Verified closeout (2026-08-26)
+
+Phase 2 leftovers reviewed in [ADR 0018](adr/0018-phase3-closeout-deferred-controls.md): RLS FORCE + `merchantos_app` fixed; token refresh and local HTTPS deferred.
+
+Metric definitions: [metrics.md](metrics.md). Visual system: [DESIGN.md](DESIGN.md). On-read aggregation: [ADR 0020](adr/0020-analytics-on-read.md).
+
+| Check | Result |
+|---|---|
+| Alembic | `0005_phase4 (head)` |
+| Compose | Postgres 16, Redis 7, ElasticMQ (unchanged from Phase 3) |
+| pytest (`DATABASE_URL` + `SQS_ENDPOINT_URL`) | 86 passed, 0 skipped (re-run after visual QA) |
+| ruff / mypy | Clean |
+| web lint / tsc / vitest | Clean; 12 passed, 0 skipped |
+| Live dashboard QA | Chromium against Compose + Phase 3 sync projection (2026-08-26) |
+| LLM / MCP / agents / mutations | Not used |
+
+### Phase 4 deferrals (not defects)
+
+- Slice endpoints (`revenue`, `orders`, `inventory`, `customers`, `health`, `opportunities`) reuse `overview()` internally. Extra aggregates are bounded, not N+1. Revisit if latency is measured.
+- Offline token refresh and local HTTPS remain deferred ([ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)).
+- `/actions` is navigation only until approval-gated mutations exist.
+- React Hook Form, Zod, and date-fns stay locked by [ADR 0019](adr/0019-frontend-ui-stack.md) even though Phase 4 is read-only.
+
+## 20. Phase 5
+
+**Status:** Closed 2026-08-26. In-process MCP read-tool layer. Do not start Phase 6 from this section.
+
+```
+Future Agent
+  → ToolRegistry.for_agent
+  → trusted TenantContext (from_session / from_job_row)
+  → permission + Pydantic schemas
+  → AnalyticsService (packages/app)
+  → AnalyticsRepository
+  → PostgreSQL
+```
+
+No LangGraph, LLM, propose tools, Shopify mutations, or merchant approvals. Tools never accept tenant identity. Catalog and permissions: [mcp.md](mcp.md), [ADR 0021](adr/0021-mcp-read-permissions.md). Hosting: [ADR 0004](adr/0004-mcp-in-process-registry.md).
+
+Implemented:
+
+- Explicit `ToolRegistry` / `AgentToolPort` (`packages/mcp`)
+- Nine read-only LOW-risk commerce tools backed by `AnalyticsService`
+- Resource-scoped permissions; forbidden names cannot be registered
+- Input limits, typed errors, redacted `tool_invoked` telemetry
+- Tenant isolation and security tests
+
+Out of Phase 5: agents, LLM, `create_recommendation` / `create_action_plan`, execute tools, HTTP MCP server.
+
+## 21. Phase 6
+
+**Status:** Closed 2026-08-26. LangGraph orchestrator runtime. Do not start Phase 7 from this document.
+
+```
+POST /api/v1/ask
+  → AgentRun PENDING + outbox
+  → SQS {job_kind=agent_run, job_id}
+  → TenantContext.from_job_row
+  → AgentCapabilities (LLMPort + ToolRegistry, no mutator)
+  → Orchestrator graph (plan → optional get_store_overview → finalize)
+  → AgentRun COMPLETED | FAILED | CANCELLED
+```
+
+No specialist agents, propose tools, Shopify mutations, or merchant approvals. LLM output is schema-validated. Tenant is never taken from the model. [agents.md](agents.md), [ADR 0008](adr/0008-llm-provider-port.md), [ADR 0012](adr/0012-capability-isolated-workers.md).
+
+Implemented:
+
+- `packages/llm` (`LLMPort`, `FakeLLM`, `OpenAIAdapter`)
+- `packages/agents` orchestrator graph and typed `AgentState`
+- `agent_runs` / `tool_calls` persistence (Alembic `0006_phase6`)
+- Ask API + worker handler + lease/idempotency
+- Deterministic `apps/agentbench` runtime scenario
+
+Out of Phase 6: Analytics/Inventory/Customer/Strategy/ActionPlanner nodes, `WAITING_APPROVAL`, live-model CI.
+
+## 22. Phase 7
+
+**Status:** Closed 2026-08-26. Specialized commerce agents. Do not start Phase 8 from this document.
+
+```
+POST /api/v1/ask
+  → AgentRun PENDING + outbox
+  → SQS {job_kind=agent_run, job_id}
+  → TenantContext.from_job_row
+  → Orchestrator classifies
+  → allowlisted specialist (analytics | inventory | customer)
+  → ToolPort.for_agent(name)
+  → structured AgentResult (findings + evidence ids)
+  → AgentRun COMPLETED | FAILED | CANCELLED
+```
+
+Specialists reason only. They use Phase 5 read tools and the Phase 6 LangGraph runtime. No Strategy, ActionPlanner, approvals, or Shopify mutations.
+
+Confidence is a deterministic HIGH/MEDIUM/LOW ceiling; the model may only stay or go lower. Findings without valid evidence ids are dropped.

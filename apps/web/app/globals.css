@@ -2,6 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
+@layer base {
+  :root {
+    --background: 40 14% 97%;
+    --foreground: 240 10% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 8%;
+    --muted: 40 10% 94%;
+    --muted-foreground: 240 5% 42%;
+    --border: 40 8% 88%;
+    --ring: 168 55% 32%;
+    --accent: 168 55% 32%;
+    --accent-foreground: 0 0% 100%;
+    --danger: 0 62% 46%;
+    --sidebar: 40 12% 96%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 240 8% 6%;
+    --foreground: 40 10% 96%;
+    --card: 240 6% 9%;
+    --card-foreground: 40 10% 96%;
+    --muted: 240 5% 13%;
+    --muted-foreground: 240 5% 68%;
+    --border: 240 5% 18%;
+    --ring: 168 45% 48%;
+    --accent: 168 45% 48%;
+    --accent-foreground: 240 8% 6%;
+    --danger: 0 70% 68%;
+    --sidebar: 240 8% 7%;
+  }
+
+  * {
+    @apply border-[hsl(var(--border))];
+  }
+
+  html,
+  body {
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))] antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-[hsl(var(--ring))] ring-offset-2 ring-offset-[hsl(var(--background))];
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

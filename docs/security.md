@@ -1,7 +1,7 @@
 # MerchantOS Security Model
 
 **Status:** Accepted for V1 planning  
-**Related:** [contracts.md](contracts.md), [ADR 0014](adr/0014-tenant-from-job-row.md), [ADR 0013](adr/0013-proposal-vs-approval-types.md), [ADR 0017](adr/0017-oauth-and-mandatory-webhooks.md)
+**Related:** [contracts.md](contracts.md), [ADR 0014](adr/0014-tenant-from-job-row.md), [ADR 0013](adr/0013-proposal-vs-approval-types.md), [ADR 0017](adr/0017-oauth-and-mandatory-webhooks.md), [ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)
 
 Security is designed in from Phase 1. It is not a late hardening sprint.
 
@@ -48,6 +48,12 @@ Authenticated request → TenantContext.from_session
 
 Tests with two merchants on every list/get path are mandatory once those APIs exist.
 
+RLS is `ENABLE` + `FORCE` on tenant tables ([ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)). Commerce tables return no rows when `app.current_merchant_id` is unset. Privileged identity/job tables allow an unset GUC so shop-domain lookup and `job_id` load still work. Repositories still require `TenantContext` and add `merchant_id` in SQL.
+
+Compose `DATABASE_URL` user `merchantos` is a superuser (`BYPASSRLS`) — policies do not apply to it. Role `merchantos_app` is `NOSUPERUSER` / `NOBYPASSRLS`. Staging and production api/worker must not connect as a superuser or `BYPASSRLS` role.
+
+Offline access tokens: ciphertext and refresh material are stored; refresh/rotation is not implemented. GraphQL `401` fails closed (`StoreUninstalledError`). Required before a live public-app install lasts more than one hour; not a fail-open hole.
+
 ## Secrets
 
 | Secret | Store | Consumers |
@@ -59,6 +65,18 @@ Tests with two merchants on every list/get path are mandatory once those APIs ex
 | DB credentials | Secrets Manager / compose | api, worker |
 
 Agents never receive raw tokens. `shopify_credentials` is not joined into list queries.
+
+Phase 2: AES-256-GCM local envelope (`TOKEN_ENCRYPTION_KEY` + `key_version`). Uninstall overwrites ciphertext with a tombstone so decrypt fails closed. `/api/v1/me` and `/settings` never include token fields. Callback HMAC, one-time shop-bound `state`, and `*.myshopify.com` validation are enforced before token exchange.
+
+Phase 3: commerce webhooks ACK after HMAC + unique `event_id`; catalog writes happen on the worker. Webhook `payload_json` stores resource GIDs only. Sync/worker logs include `job_id`, `store_id`, `resource`, counts, and error types — never access tokens or raw customer payloads. Repositories require `TenantContext`. Agents have no import path into this layer.
+
+Phase 4: analytics endpoints take date filters only. Tenant comes from the session cookie. Responses omit customer email, tokens, and stack traces. Two-merchant tests cover every analytics path.
+
+Phase 5: MCP tools are an interface over the same `AnalyticsService`. Tenant identity is stripped from arguments and taken only from `TenantContext.from_session` / `from_job_row`. Permissions are resource-scoped (`analytics:read`, `products:read`, `inventory:read`, `orders:read`, `customers:read`). There is no SQL, HTTP, shell, credential, or Shopify tool. Unknown and forbidden names fail closed. Telemetry logs `tool_call_id`, tool name, tenant ids, duration, and error category — never tokens or emails.
+
+Phase 6: the orchestrator reasons through `LLMPort`. `AgentState` has no tenant, token, or approval fields. Tool calls go through `ToolPort.for_agent("orchestrator")` (`get_store_overview` only). Invalid model output is rejected; `status: APPROVED` cannot persist an approval. Worker `AgentCapabilities` has no `ShopifyMutator`. API keys stay in process settings and never enter state, prompts, or `agent_runs` rows.
+
+Phase 7: specialists bind `ToolPort.for_agent(analytics|inventory|customer)` from an allowlisted registry. Model output cannot load arbitrary agents. Merchant text is untrusted DATA. Findings must cite evidence ids extracted from tool output. Customer results must not include emails.
 
 ## Prompt injection
 
@@ -77,7 +95,7 @@ Mitigations:
 |--------|--------|------------|------|
 | OAuth CSRF / shop spoofing | Foreign store linked | One-time signed `state`, `*.myshopify.com` allowlist, callback shop match | Forged state, shop swap |
 | Offline token theft | Store read/write | Envelope encrypt, isolated table, redaction | No token in API/logs |
-| Cross-tenant read | Data leak | TenantContext + RLS + 404 | Two-merchant fixtures |
+| Cross-tenant read | Data leak | TenantContext + FORCE RLS + 404; app role has no BYPASSRLS | Two-merchant fixtures; raw SELECT as `merchantos_app` |
 | Prompt injection | Tool abuse | Untrusted data; coded authz | AgentBench suite |
 | LLM-built Shopify calls | Arbitrary mutation | No generic HTTP/GraphQL tool | Unknown tool rejected |
 | Unauthorized mutation | Price/discount change | PolicyService; MEDIUM/HIGH need merchant ApprovalRecord; CRITICAL blocked; no execute tool | Unapproved `ApprovedAction.load` fails; agent import of mutator fails |

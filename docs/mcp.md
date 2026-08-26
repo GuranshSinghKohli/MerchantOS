@@ -1,70 +1,84 @@
 # MerchantOS MCP Tool Layer
 
-**Status:** Accepted (post-remediation)  
-**Related:** [contracts.md](contracts.md), [ADR 0004](adr/0004-mcp-in-process-registry.md), [ADR 0012](adr/0012-capability-isolated-workers.md), [ADR 0016](adr/0016-deterministic-action-snapshots.md)
+**Status:** Accepted (Phase 5 implemented 2026-08-26)  
+**Related:** [contracts.md](contracts.md), [ADR 0004](adr/0004-mcp-in-process-registry.md), [ADR 0012](adr/0012-capability-isolated-workers.md), [ADR 0014](adr/0014-tenant-from-job-row.md), [ADR 0021](adr/0021-mcp-read-permissions.md)
 
-Agents interact with the world only through typed **read and propose** tools. There is no generic HTTP, SQL, Shopify, or execute tool.
+Agents interact with the world only through typed **read** tools. Phase 7 specialists use the Phase 5 registry via `ToolPort.for_agent`. Propose tools remain unregistered. There is no generic HTTP, SQL, Shopify, or execute tool.
 
 ## Architecture
 
 ```
-Agent
-  → ToolPort.for_agent(name)
+Future Agent
+  → ToolRegistry.for_agent(name)
       → allowlist check (ToolNotAllowed)
-      → Inject TenantContext (from job row / session)
-      → Permission + Pydantic validation
-      → Application service
-      → Repository (tenant enforced)
-      → Redacted tool_calls + audit_events
+      → TenantContext (from_session / from_job_row only)
+      → strip model-supplied tenant fields
+      → permission + Pydantic validation
+      → AnalyticsService
+      → AnalyticsRepository (tenant enforced)
+      → redacted tool_invoked log
 ```
 
-`execute_approved_action` **does not exist**. Execution is `ExecutionWorker` → `ApprovedAction.load` → `ShopifyMutator`.
+The MCP layer is an interface. It does not recompute analytics or issue SQL.
+
+`execute_approved_action` **does not exist**. Execution remains `ExecutionWorker` → `ApprovedAction.load` → `ShopifyMutator` (later phase).
 
 ## Allowlists
 
-Runtime `AGENT_TOOLS` frozensets (see contracts). Binding the full registry to a node is forbidden.
+Runtime `AGENT_TOOLS` frozensets live in `packages/mcp`. Binding the full registry to a node is forbidden. Only explicitly registered tools may be invoked.
+
+Phase 5 agent allowlists (read tools only):
+
+| Agent | Tools |
+|-------|-------|
+| orchestrator | `get_store_overview` |
+| analytics | overview, revenue, orders, product performance, sales trends, health, opportunities |
+| inventory | `get_inventory_health`, `get_product_performance` |
+| customer | `get_customer_metrics` |
+
+Phase 7 binds analytics, inventory, and customer. `strategy` and `action_planner` are not bound until propose tools exist.
 
 ## Common rules
 
 | Field | Rule |
 |-------|------|
 | Tenant | Injected; strip any model-supplied tenant id; no tenant field on input schemas |
-| I/O | Pydantic → JSON Schema |
-| Timeout | Enforced; `TOOL_TIMEOUT` |
-| Retry | Worker may retry **read** timeouts |
-| Audit | Redacted I/O on every call |
-| Unknown name | Error — no HTTP fallback |
+| I/O | Pydantic → JSON Schema; `extra=forbid` on inputs |
+| Timeout | Enforced per tool (Phase 5: 5s) |
+| Retry | Worker may retry **read** timeouts (when agents exist) |
+| Audit | Redacted I/O on every `tool_invoked` |
+| Unknown name | `UnknownTool` — no HTTP/SQL fallback |
 
-Permissions: `commerce.read`, `recommendation.write`, `action.propose`.  
+Permissions ([ADR 0021](adr/0021-mcp-read-permissions.md)): `analytics:read`, `products:read`, `inventory:read`, `orders:read`, `customers:read`.  
 (`action.execute` is not a tool permission.)
 
-Risk on **propose** is assigned later by PolicyService, not by the tool based on model text.
+All Phase 5 tools are `READ_ONLY` / `LOW` risk. Future mutation tools must use the approval/action architecture.
 
-## Tool catalog
+## Phase 5 tool catalog
 
-Read tools are unchanged in spirit (`get_store_context` … `get_sales_trends`, `search_merchant_knowledge`). None accept `tenant_id`. Timeouts as before. Metrics computed in application code.
+Every tool: tenant required, timeout 5s, `extra=forbid` inputs, no `tenant_id` / `merchant_id` / `store_id` fields. Filters: `preset`, `compare`, optional `from`/`to` (custom requires both; max 366 days). Product performance also accepts `limit` (1–100), `offset` (≤ 10000), `sort`.
 
-### create_recommendation
+| Tool | Permission | Output (bounded) |
+|------|------------|------------------|
+| `get_store_overview` | `analytics:read` | KPIs, trends, health, opportunities |
+| `get_revenue_metrics` | `analytics:read` | KPIs, daily revenue trend |
+| `get_order_metrics` | `orders:read` | Order counts, daily trend |
+| `get_product_performance` | `products:read` | Paginated product rows |
+| `get_inventory_health` | `inventory:read` | Inventory coverage |
+| `get_customer_metrics` | `customers:read` | New/returning counts (no emails) |
+| `get_sales_trends` | `analytics:read` | Daily revenue and customer series |
+| `get_merchant_health` | `analytics:read` | Health score and components |
+| `get_opportunities` | `analytics:read` | Deterministic opportunity list |
 
-- In: `{ problem, evidence, hypothesis, proposed_action, expected_impact, confidence, risks, affected_resources, measurement_plan }`
-- **Not in input:** `approval_required`, `tenant_id`, `status`
-- Out: `{ recommendation_id }`
-- Permission: `recommendation.write` · Timeout: 3s
-- Agents: `strategy` only
+Outputs are JSON-schema validated. Extra service fields are dropped. Tokens, emails, and stack traces are not returned.
 
-### create_action_plan
+### Phase 6 (not registered)
 
-- In: `{ recommendation_id, action_type: ActionType, resource_ids: UUID[], rationale, evidence_refs }`
-- **Not in input:** `params` blob, `before_state`, `after_state`, `risk_level`, `payload`, `status`
-- Behavior: `SnapshotService` builds snapshot from DB; `PolicyService.evaluate`; persist `Action.PROPOSED` or `BLOCKED`
-- Out: `{ action_id, status: "PROPOSED"|"BLOCKED", risk_level, before_state, after_state }` (server-authored)
-- Permission: `action.propose` · Timeout: 5s
-- Agents: `action_planner` only
-- Errors: `UNKNOWN_ACTION_TYPE`, `RESOURCE_NOT_FOUND`, `CRITICAL_BLOCKED`
+`create_recommendation`, `create_action_plan`, and `search_merchant_knowledge` remain specified in planning docs. They are not in the Phase 5 registry.
 
-### validate_action — removed as an agent tool
+## Errors
 
-PolicyService is called by the application service inside `create_action_plan` (and can be called from the approve API for a re-check). Agents do not invoke policy.
+Typed `ToolError` codes: `invalid_input`, `unauthorized`, `forbidden`, `tenant_mismatch`, `not_found`, `timeout`, `dependency_failure`, `rate_limit`, `internal_failure`, `unknown_tool`, `tool_not_allowed`. Messages are agent-safe. Causes are chained for operators; they are not serialized to callers.
 
 ## What will never exist
 
@@ -75,10 +89,13 @@ PolicyService is called by the application service inside `create_action_plan` (
 - `run_shell`
 - Any tool that accepts a tenant id
 - Any tool that accepts `status: APPROVED`
+- Dynamic discovery of arbitrary Python functions
 
 ## Tests
 
-- Registry used by agent handler raises on `execute_approved_action`
-- `create_action_plan` with extra `payload` / `status` fields fails schema validation
-- Persisted snapshot ignores any model-supplied after_state
-- `ToolPort.for_agent("analytics")` cannot call `create_action_plan`
+- Registered tools are discoverable; unregistered and forbidden names raise `UnknownTool`
+- Extra fields, SQL/HTTP-shaped arguments, and oversized limits fail validation
+- Tenant fields in arguments are stripped; Tenant A cannot read Tenant B
+- Permission checks and agent allowlists fail closed
+- Timeouts, dependency failures, and output-schema failures are typed
+- Source scan: MCP package has no SQL/HTTP/shell/Shopify mutator escape hatches

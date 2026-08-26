@@ -13,6 +13,8 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from merchantos_domain import QueueMessage
 
+from merchantos_queue.received import ReceivedMessage
+
 
 class ElasticMqDevQueue:
     """SQS-compatible client bound to a local ElasticMQ endpoint."""
@@ -52,6 +54,46 @@ class ElasticMqDevQueue:
         self._client.send_message(
             QueueUrl=self._ensure_queue(),
             MessageBody=message.model_dump_json(exclude_none=True),
+        )
+
+    def receive(
+        self,
+        *,
+        max_messages: int = 1,
+        wait_seconds: int = 0,
+        visibility_timeout: int = 60,
+    ) -> list[ReceivedMessage]:
+        response = self._client.receive_message(
+            QueueUrl=self._ensure_queue(),
+            MaxNumberOfMessages=min(max_messages, 10),
+            WaitTimeSeconds=min(wait_seconds, 20),
+            VisibilityTimeout=visibility_timeout,
+        )
+        received: list[ReceivedMessage] = []
+        for raw in response.get("Messages") or []:
+            body = raw.get("Body")
+            handle = raw.get("ReceiptHandle")
+            if not isinstance(body, str) or not isinstance(handle, str):
+                continue
+            received.append(
+                ReceivedMessage(
+                    message=QueueMessage.model_validate_json(body),
+                    receipt_handle=handle,
+                )
+            )
+        return received
+
+    def delete(self, receipt_handle: str) -> None:
+        self._client.delete_message(
+            QueueUrl=self._ensure_queue(),
+            ReceiptHandle=receipt_handle,
+        )
+
+    def nack(self, receipt_handle: str) -> None:
+        self._client.change_message_visibility(
+            QueueUrl=self._ensure_queue(),
+            ReceiptHandle=receipt_handle,
+            VisibilityTimeout=0,
         )
 
     def _ensure_queue(self) -> str:

@@ -4,10 +4,14 @@ version = "0.1.0"
 description = "SQLAlchemy engine, sessions, and Alembic"
 requires-python = ">=3.12"
 dependencies = [
+    "merchantos-domain",
     "sqlalchemy>=2.0.36",
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
 ]
+
+[tool.uv.sources]
+merchantos-domain = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

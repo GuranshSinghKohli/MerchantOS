@@ -3,6 +3,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from merchantos_db.engine import normalize_database_url
+from merchantos_db.models import Base
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
@@ -13,8 +14,7 @@ database_url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalch
 if database_url:
     config.set_main_option("sqlalchemy.url", normalize_database_url(database_url))
 
-# Phase 1: no domain models. Later phases import metadata here.
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

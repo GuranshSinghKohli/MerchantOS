@@ -12,6 +12,12 @@ def test_in_memory_enqueue() -> None:
     queue.ping()
     queue.enqueue(message)
     assert queue.messages == [message]
+    received = queue.receive(max_messages=1)
+    assert received[0].message == message
+    queue.nack(received[0].receipt_handle)
+    again = queue.receive(max_messages=1)
+    queue.delete(again[0].receipt_handle)
+    assert queue.receive() == []
 
 
 def test_factory_without_endpoint_is_memory() -> None:

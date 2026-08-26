@@ -25,7 +25,9 @@ apps/worker       → agent / execution / sync / webhook handlers (separate capa
 apps/web          → localhost (from Overview phase)
 ```
 
-Phase 1 (health/ready only) does not start workers or the queue. OAuth/webhook phases require a documented HTTPS tunnel (ngrok or Cloudflare Tunnel).
+Phase 1 (health/ready only) does not start workers or the queue. Phase 2 OAuth/webhooks require a public HTTPS tunnel (ngrok or Cloudflare Tunnel) so Shopify can reach `/api/v1/auth/shopify/callback` and `/api/v1/webhooks/shopify/*`. Set `SHOPIFY_REDIRECT_URI` and `API_PUBLIC_BASE_URL` to that origin. `shopify.app.toml` `redirect_urls` must match exactly. This is an ops requirement, not a missing code path ([ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)).
+
+Phase 3: `make worker` consumes `sync` and `webhook` jobs from ElasticMQ (dev) / SQS (later). The API only enqueues via the transactional outbox. Commerce webhook subscriptions are declared in `shopify.app.toml` for the granted read scopes.
 
 `GET /health` does not require dependencies. `GET /ready` requires Postgres and Redis.
 
@@ -53,7 +55,7 @@ Shopify ──OAuth/WH──┤                      │
 |---------|-----|
 | ALB | TLS termination, path routing to api |
 | ECS Fargate | `api` and `worker` services, independently scaled |
-| RDS PostgreSQL | Primary state |
+| RDS PostgreSQL | Primary state. api/worker connect as a non-superuser, non-`BYPASSRLS` role ([ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)); never the RDS master user. |
 | ElastiCache Redis | Rate limits, short cache, optional session store |
 | SQS + DLQ | Sync, webhooks, agent runs, action execution |
 | S3 | Eval fixtures, traces, artifacts |

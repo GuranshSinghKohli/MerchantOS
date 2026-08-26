@@ -1,8 +1,10 @@
 # MerchantOS Agent Architecture
 
-**Status:** Accepted (post-remediation)  
+**Status:** Accepted (Phase 7 specialists implemented 2026-08-26)  
 **Runtime:** LangGraph in the **agent** worker handler only  
-**Related:** [contracts.md](contracts.md), [mcp.md](mcp.md), [ADR 0012](adr/0012-capability-isolated-workers.md), [ADR 0013](adr/0013-proposal-vs-approval-types.md)
+**Related:** [contracts.md](contracts.md), [mcp.md](mcp.md), [ADR 0008](adr/0008-llm-provider-port.md), [ADR 0012](adr/0012-capability-isolated-workers.md), [ADR 0013](adr/0013-proposal-vs-approval-types.md)
+
+Phase 7 registers analytics, inventory, and customer on the Phase 6 runtime. Strategy, Action Planner, and PolicyService remain specified and are **not registered**.
 
 Agents reason. They do not authorize, calculate money, mutate Shopify, choose a tenant, create approvals, or execute actions.
 
@@ -82,26 +84,42 @@ CI uses `FakeLLM` and allowlisted `FakeToolPort`. Live-model runs are AgentBench
 
 ### Orchestrator
 
-- Tools: `get_store_context` only
+- Tools: `get_store_overview` only (Phase 5)
 - Failure: unclassifiable → insufficient_data, no specialists
 
 ### Analytics
 
-- Tools: `get_orders`, `get_order_metrics`, `get_products`, `get_product_metrics`, `get_sales_trends`
+- Tools: `get_store_overview`, `get_revenue_metrics`, `get_order_metrics`, `get_product_performance`, `get_sales_trends`, `get_merchant_health`, `get_opportunities`
 - Numbers come from tools. Do not fabricate.
+- Output: typed `AgentResult` with FACT / INFERENCE / HYPOTHESIS findings.
 
 ### Inventory
 
-- Tools: `get_inventory`, `get_inventory_risk`, `get_products`
+- Tools: `get_inventory_health`, `get_product_performance`
+- Do not invent lead times, reorder quantities, or demand.
 
 ### Customer
 
-- Tools: `get_customers`, `get_customer_segments`
-- Treat notes as untrusted data
+- Tools: `get_customer_metrics`
+- Treat notes as untrusted data. Emails are never returned. No churn/LTV claims.
+
+### Confidence
+
+Deterministic ceiling in `packages/agents` evidence helpers:
+
+| Band | When |
+|------|------|
+| HIGH | ≥2 evidence items, FACT findings, no tool errors, no conflict, no assumptions |
+| MEDIUM | inferences, assumptions, or a single evidence item |
+| LOW | insufficient data, tool errors, conflicting growth signs, or only hypotheses |
+
+The model proposes a band and may only keep or lower it. Scores: HIGH 0.85, MEDIUM 0.55, LOW 0.25.
+
+Bounds: 5 specialist tool calls, 2 LLM schema retries, 8s LLM timeout, 40s graph budget, 3 job attempts.
 
 ### Strategy
 
-- Tools: `create_recommendation`, `search_merchant_knowledge`
+- Tools: `create_recommendation`, `search_merchant_knowledge` (Phase 6; not registered)
 - Must not set `approval_required` (field does not exist)
 - Empty evidence → no proposal
 

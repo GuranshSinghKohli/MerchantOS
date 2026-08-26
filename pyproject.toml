@@ -19,8 +19,14 @@ members = [
     "apps/worker",
     "packages/domain",
     "packages/observability",
+    "packages/app",
+    "packages/mcp",
+    "packages/llm",
+    "packages/agents",
+    "apps/agentbench",
     "packages/db",
     "packages/queue",
+    "packages/shopify",
 ]
 
 [tool.ruff]
@@ -49,21 +55,33 @@ strict = true
 packages = [
     "merchantos_domain",
     "merchantos_observability",
+    "merchantos_app",
+    "merchantos_mcp",
+    "merchantos_llm",
+    "merchantos_agents",
+    "merchantos_agentbench",
     "merchantos_db",
     "merchantos_queue",
+    "merchantos_shopify",
     "merchantos_api",
     "merchantos_worker",
 ]
 mypy_path = [
     "packages/domain/src",
     "packages/observability/src",
+    "packages/app/src",
+    "packages/mcp/src",
+    "packages/llm/src",
+    "packages/agents/src",
+    "apps/agentbench/src",
     "packages/db/src",
     "packages/queue/src",
+    "packages/shopify/src",
     "apps/api/src",
     "apps/worker/src",
 ]
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["boto3", "botocore", "botocore.*"]
+module = ["boto3", "botocore", "botocore.*", "langgraph", "langgraph.*", "langchain_core", "langchain_core.*"]
 ignore_missing_imports = true

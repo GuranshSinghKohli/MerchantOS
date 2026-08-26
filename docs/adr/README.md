@@ -34,3 +34,7 @@ Index:
 | [0015](0015-transactional-outbox-and-leases.md) | Outbox and leases | Accepted |
 | [0016](0016-deterministic-action-snapshots.md) | Deterministic action snapshots | Accepted |
 | [0017](0017-oauth-and-mandatory-webhooks.md) | OAuth hardening and mandatory webhooks | Accepted |
+| [0018](0018-phase3-closeout-deferred-controls.md) | Phase 3 closeout: token refresh, RLS FORCE, local HTTPS | Accepted |
+| [0019](0019-frontend-ui-stack.md) | Approved frontend UI stack and design direction | Accepted |
+| [0020](0020-analytics-on-read.md) | Analytics computed on read from the commerce projection | Accepted |
+| [0021](0021-mcp-read-permissions.md) | Resource-scoped MCP read permissions and Phase 5 tool catalog | Accepted |

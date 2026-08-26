@@ -31,9 +31,21 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
         request_id = getattr(request.state, "request_id", "unknown")
         logger.warning("domain_error", error=str(exc), request_id=request_id)
+        status = getattr(exc, "http_status", 400)
+        title = "Bad Request"
+        if status == 401:
+            title = "Unauthorized"
+        elif status == 403:
+            title = "Forbidden"
+        elif status == 404:
+            title = "Not Found"
+        elif status == 409:
+            title = "Conflict"
+        elif status == 503:
+            title = "Service Unavailable"
         return problem(
-            status=400,
-            title="Bad Request",
+            status=status,
+            title=title,
             detail=str(exc),
             request_id=request_id,
             type_suffix="domain",

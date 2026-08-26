@@ -1,0 +1,27 @@
+[project]
+name = "merchantos-agents"
+version = "0.1.0"
+description = "LangGraph orchestrator runtime (no ApprovedAction, no mutator)"
+requires-python = ">=3.12"
+dependencies = [
+    "merchantos-domain",
+    "merchantos-observability",
+    "merchantos-llm",
+    "merchantos-mcp",
+    "langgraph>=0.2.60",
+    "langchain-core>=0.3",
+    "pydantic>=2.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/merchantos_agents"]
+
+[tool.uv.sources]
+merchantos-domain = { workspace = true }
+merchantos-observability = { workspace = true }
+merchantos-llm = { workspace = true }
+merchantos-mcp = { workspace = true }

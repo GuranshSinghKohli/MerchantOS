@@ -1,0 +1,20 @@
+[project]
+name = "merchantos-app"
+version = "0.1.0"
+description = "MerchantOS application services (analytics and later policy/approval)"
+requires-python = ">=3.12"
+dependencies = [
+    "merchantos-domain",
+    "merchantos-db",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/merchantos_app"]
+
+[tool.uv.sources]
+merchantos-domain = { workspace = true }
+merchantos-db = { workspace = true }

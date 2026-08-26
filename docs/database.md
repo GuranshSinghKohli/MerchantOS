@@ -18,7 +18,7 @@ PostgreSQL is the source of truth for normalized application state. Shopify is t
 | Timestamps | `created_at`, `updated_at` timestamptz |
 | Soft delete | `deleted_at` only where Shopify can delete the resource |
 | JSONB | Agent metadata, tool I/O redacted copies, evidence, eval expect — not core entities |
-| Isolation | Repositories require `TenantContext`; RLS `SET LOCAL app.current_merchant_id` |
+| Isolation | Repositories require `TenantContext`; RLS `SET LOCAL app.current_merchant_id` (`ENABLE` + `FORCE`; see [ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)) |
 | Money / counts | `NUMERIC` / `INTEGER` computed in application code, stored as facts |
 
 Do not hide business rules in SQL. Do not query merchant data without a tenant. Do not join `shopify_credentials` into list queries.
@@ -124,9 +124,11 @@ Isolated table. Selected only by the Shopify adapter.
 | merchant_id | UUID FK | |
 | store_id | UUID FK UNIQUE | |
 | encrypted_offline_token | BYTEA | envelope encrypted |
-| token_expires_at | timestamptz | nullable for offline tokens |
+| encrypted_refresh_token | BYTEA | nullable; required for expiring offline tokens |
+| token_expires_at | timestamptz | from `expires_in` |
+| refresh_token_expires_at | timestamptz | nullable |
 | scopes | TEXT[] | granted scopes |
-| key_version | TEXT | Secrets Manager key id |
+| key_version | TEXT | Secrets Manager / local key id |
 
 ### oauth_states
 
@@ -192,6 +194,8 @@ Proactive findings: `severity`, `confidence`, `title`, `body`, `evidence JSONB`,
 ## Control plane
 
 ### agent_runs
+
+Implemented in Alembic `0006_phase6`. Phase 7 stores the specialist name in `classification` and structured `AgentResult` fields in `result_json`. `WAITING_APPROVAL` remains unused.
 
 | Column | Notes |
 |--------|-------|
@@ -263,9 +267,9 @@ Index: `(published_at) WHERE published_at IS NULL`.
 
 ### webhook_events
 
-`topic`, `shop_domain`, `event_id UNIQUE`, `payload_hash`, `status`, `received_at`.  
+`topic`, `shop_domain`, `event_id UNIQUE`, `payload_hash`, `resource_gid`, `payload_json` (resource identifiers only — not full customer records), `status`, `received_at`.  
 `merchant_id` / `store_id` set by looking up `shop_domain` **before** enqueue. Unknown shop (valid HMAC, unknown install) is stored with null tenant, not processed, alerted. After lookup, RLS applies.  
-Duplicate `event_id` → 200 no-op.
+Duplicate `event_id` → 200 no-op. Commerce topics write `outbox_messages` in the same transaction; the HTTP handler does not upsert the catalog.
 
 ### sync_jobs
 
@@ -291,10 +295,12 @@ Per scenario: `task_success`, `tool_accuracy`, `groundedness`, `action_accuracy`
 
 ## Migration strategy
 
-1. Phase 2: identity + sessions + audit + RLS.
-2. Phase 3: credentials + oauth_states.
-3. Phase 5: commerce projection.
-4. Later phases: metrics, agent/control, eval.
+1. Phase 2: identity, sessions, audit, RLS, `oauth_states`, `shopify_credentials` (OAuth/uninstall cannot wait). Expiring offline tokens also store `encrypted_refresh_token` (official requirement for new public apps). Refresh/rotation of that token is deferred ([ADR 0018](adr/0018-phase3-closeout-deferred-controls.md)).
+2. Phase 3: commerce projection (products, variants, locations, customers, orders, order_lines, inventory_snapshots) plus `sync_jobs`, `outbox_messages`, and `idempotency_keys`. Ingestion cannot persist without these tables. `webhook_events` also stores `resource_gid` and identifier-only `payload_json` so workers can apply deletes/inventory without keeping customer PII on the request thread.
+3. Phase 3 closeout: `FORCE ROW LEVEL SECURITY` and DML role `merchantos_app` (`NOSUPERUSER`, `NOBYPASSRLS`). Compose owner `merchantos` remains a superuser for Alembic.
+4. Later phases: metrics, insights, agent/control, eval. Terraform must create the production app role with a Secrets Manager password before migrate.
+
+This supersedes the earlier planning note that deferred commerce tables to Phase 5 — that contradicted `SYSTEM_DESIGN.md` Phase 3 (Shopify data ingestion).
 
 Alembic versions are the only schema source of truth. No manual production DDL.
 
@@ -303,6 +309,7 @@ Alembic versions are the only schema source of truth. No manual production DDL.
 - Tenant column + FK on every merchant-owned table
 - `(merchant_id, shopify_gid)` unique for Shopify resources
 - Time-range list indexes for orders, runs, audit
+- Phase 4: `(merchant_id, store_id, processed_at)` on orders; `(merchant_id, first_order_at)` on customers; `(merchant_id, order_id)` on order_lines
 - Action idempotency unique
 - Webhook `event_id` unique
 - Credentials table not referenced by ORM relationships used in list endpoints

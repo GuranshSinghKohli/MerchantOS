@@ -15,3 +15,10 @@ class WorkerSettings(BaseSettings):
     aws_access_key_id: str = Field(default="local")
     aws_secret_access_key: str = Field(default="local")
     worker_once: bool = False
+    shopify_api_key: str = ""
+    shopify_api_secret: str = ""
+    token_encryption_key: str = ""
+    token_encryption_key_version: str = "local-v1"
+    llm_provider: str = "fake"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4.1-mini"

@@ -6,7 +6,9 @@ requires-python = ">=3.12"
 dependencies = [
     "merchantos-domain",
     "merchantos-observability",
+    "merchantos-app",
     "merchantos-db",
+    "merchantos-shopify",
     "merchantos-queue",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -24,5 +26,7 @@ packages = ["src/merchantos_api"]
 [tool.uv.sources]
 merchantos-domain = { workspace = true }
 merchantos-observability = { workspace = true }
+merchantos-app = { workspace = true }
 merchantos-db = { workspace = true }
+merchantos-shopify = { workspace = true }
 merchantos-queue = { workspace = true }

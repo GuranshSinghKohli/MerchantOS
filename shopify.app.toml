@@ -1,0 +1,47 @@
+# Official Shopify app config.
+# https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
+# Replace client_id / URLs after creating the Partner / Dev Dashboard app.
+# Never put the client secret in this file.
+
+name = "MerchantOS"
+client_id = "replace-with-dev-dashboard-client-id"
+application_url = "https://example.ngrok.app"
+embedded = false
+
+[access_scopes]
+# Re-validated against https://shopify.dev/docs/api/usage/access-scopes (2026-08-25).
+# Read-only for Phase 2. Write scopes wait until the demo mutation is locked.
+scopes = "read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts"
+
+[auth]
+redirect_urls = [
+  "https://example.ngrok.app/api/v1/auth/shopify/callback",
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/api/v1/webhooks/shopify/app/uninstalled"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/api/v1/webhooks/shopify/compliance"
+
+[[webhooks.subscriptions]]
+topics = [
+  "products/create",
+  "products/update",
+  "products/delete",
+  "orders/create",
+  "orders/updated",
+  "orders/cancelled",
+  "customers/create",
+  "customers/update",
+  "customers/delete",
+  "inventory_levels/update",
+  "locations/create",
+  "locations/update",
+]
+uri = "/api/v1/webhooks/shopify/commerce"

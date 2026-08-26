@@ -209,21 +209,24 @@ Factories take an explicit `JobKind`. A single “god” capability object must 
 
 ## 6. Tool registry allowlists
 
+Phase 5 registers read tools only ([ADR 0021](adr/0021-mcp-read-permissions.md)). `strategy` / `action_planner` allowlists land with propose tools.
+
 ```python
 AGENT_TOOLS: dict[AgentName, frozenset[ToolName]] = {
-    "orchestrator": frozenset({"get_store_context"}),
+    "orchestrator": frozenset({"get_store_overview"}),
     "analytics": frozenset({
-        "get_orders", "get_order_metrics",
-        "get_products", "get_product_metrics", "get_sales_trends",
+        "get_store_overview", "get_revenue_metrics", "get_order_metrics",
+        "get_product_performance", "get_sales_trends",
+        "get_merchant_health", "get_opportunities",
     }),
-    "inventory": frozenset({"get_inventory", "get_inventory_risk", "get_products"}),
-    "customer": frozenset({"get_customers", "get_customer_segments"}),
-    "strategy": frozenset({"create_recommendation", "search_merchant_knowledge"}),
-    "action_planner": frozenset({"create_action_plan"}),
+    "inventory": frozenset({"get_inventory_health", "get_product_performance"}),
+    "customer": frozenset({"get_customer_metrics"}),
 }
 
 # policy is not an agent and has no tools
 # execute_* is not a tool
+# Phase 6 (not registered): strategy create_recommendation / search_merchant_knowledge
+# Phase 6 (not registered): action_planner create_action_plan
 ```
 
 `ToolPort.for_agent(name)` returns a proxy that raises `ToolNotAllowed` for any other name. Binding “all tools” to a node is forbidden.
