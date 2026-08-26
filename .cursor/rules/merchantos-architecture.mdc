@@ -1,0 +1,33 @@
+---
+description: MerchantOS agent, MCP, data, and AWS architecture
+alwaysApply: true
+---
+
+# Architecture
+
+Canonical: [`SYSTEM_DESIGN.md`](../../SYSTEM_DESIGN.md), [`docs/contracts.md`](../../docs/contracts.md), [`docs/architecture.md`](../../docs/architecture.md).
+
+```
+User → session → proposal → PolicyService → Action.PROPOSED
+     → merchant ApprovalService → execution worker → ShopifyMutator → audit
+```
+
+No execute MCP tool. No pgvector until knowledge search is real.
+
+## Agents (LLM) vs policy (code)
+
+Orchestrator, Analytics, Inventory, Customer, Strategy, Action Planner.
+
+`PolicyService` is not an agent and has no `LLMPort`.
+
+Read/propose tools only, via `ToolPort.for_agent`. Tenant from `from_session` / `from_job_row` only.
+
+## Stack
+
+Next.js/TS/Tailwind · FastAPI/Pydantic · LangGraph · MCP-compatible tools · PostgreSQL · Redis · SQS · ECS Fargate · RDS · Secrets Manager · Terraform · GitHub Actions.
+
+## State
+
+- Action: `PROPOSED → APPROVED → QUEUED → EXECUTING → COMPLETED|FAILED` or `BLOCKED`
+- Approval: created by merchant session only
+- Queue message: `{job_kind, job_id}` only

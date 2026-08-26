@@ -1,0 +1,12 @@
+{
+  "name": "merchantos",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "web": "pnpm --filter @merchantos/web dev",
+    "web:build": "pnpm --filter @merchantos/web build",
+    "web:lint": "pnpm --filter @merchantos/web lint",
+    "web:typecheck": "pnpm --filter @merchantos/web typecheck",
+    "web:test": "pnpm --filter @merchantos/web test"
+  }
+}

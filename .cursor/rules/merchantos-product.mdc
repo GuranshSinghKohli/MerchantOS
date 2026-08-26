@@ -1,0 +1,30 @@
+---
+description: MerchantOS product identity, journeys, and non-goals
+alwaysApply: true
+---
+
+# MerchantOS Product
+
+MerchantOS is an AI-native commerce OS for Shopify merchants — a real Shopify app, not a chatbot, analytics dashboard, or Shopify clone.
+
+Canonical: [`SYSTEM_DESIGN.md`](../../SYSTEM_DESIGN.md).
+
+**Loop:** OBSERVE → UNDERSTAND → DIAGNOSE → PLAN → RECOMMEND → APPROVE → EXECUTE → MEASURE
+
+**Demo question:** "How can I increase profit this month without increasing ad spend?"
+
+## V1 screens
+
+Overview, Ask MerchantOS, Insights, Approvals, Actions, Agent Runs, Settings.
+
+## Responses must include
+
+Answer, evidence, assumptions, uncertainty/confidence, next steps, optional typed actions. Separate facts from hypotheses. Say when data is insufficient.
+
+## Non-goals (V1)
+
+Do not replace Shopify Admin, auto-spend money, support other platforms, or optimize for feature count. Critical/destructive actions are blocked. High-risk actions need explicit merchant approval.
+
+## Build incrementally
+
+Implement only the requested scope. Do not build the entire system in one shot. Before major architecture changes, explain tradeoffs and confirm.

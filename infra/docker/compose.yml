@@ -1,0 +1,43 @@
+# Local development dependencies only. Not production AWS.
+name: merchantos-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: merchantos
+      POSTGRES_PASSWORD: merchantos
+      POSTGRES_DB: merchantos
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U merchantos -d merchantos"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - merchantos_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  # DEVELOPMENT ONLY — SQS-compatible broker. Replace with AWS SQS in staging/prod.
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.6.11
+    ports:
+      - "9324:9324"
+    healthcheck:
+      test: ["CMD-SHELL", "true"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+volumes:
+  merchantos_pg:

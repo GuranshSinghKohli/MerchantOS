@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: merchantos
+          POSTGRES_PASSWORD: merchantos
+          POSTGRES_DB: merchantos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U merchantos -d merchantos"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      APP_ENV: dev
+      DATABASE_URL: postgresql://merchantos:merchantos@localhost:5432/merchantos
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --all-packages --group dev
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Typecheck
+        run: uv run mypy
+      - name: Test
+        run: uv run pytest
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install
+        run: pnpm install
+      - name: Lint
+        run: pnpm web:lint
+      - name: Typecheck
+        run: pnpm web:typecheck
+      - name: Test
+        run: pnpm web:test

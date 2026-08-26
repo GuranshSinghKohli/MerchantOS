@@ -1,0 +1,43 @@
+---
+description: MerchantOS engineering workflow, quality, and security bar
+alwaysApply: true
+---
+
+# Engineering Bar
+
+Canonical principles: [`SYSTEM_DESIGN.md`](../../SYSTEM_DESIGN.md).
+
+Assume review by experienced Shopify engineers. Prefer simple architecture. Strong typing. Small modules. Clear service interfaces. Tests with implementation. Never swallow errors. Observable async work. Idempotent external ops.
+
+## Per-feature workflow
+
+1. Understand existing architecture and inspect relevant files.
+2. Explain the plan briefly; implement only requested scope.
+3. Add/update tests; run tests, lint, and type checks.
+4. Review security and the diff.
+5. Report exactly what changed and remaining issues.
+
+## Security (non-negotiable)
+
+- Tenant isolation at API, service, DB, and tool layers
+- Server-side authz; AI cannot bypass authorization
+- Least-privilege Shopify scopes; validate against current official docs before implementing
+- Secrets in AWS Secrets Manager — never in source, logs, or the browser
+- Tool authorization, input validation, rate limits, prompt-injection defenses
+- Audit every important event; never log credentials
+
+## Shopify integration
+
+Real app: OAuth, encrypted tokens, Admin API, webhooks, initial + incremental sync, resource IDs, rate limits, retries, idempotency. Development store support. Official APIs only.
+
+## Quality
+
+No fake/mock functionality when the feature should be real. Mark development-only mocks clearly. Do not modify unrelated files. Environments (`dev` / `staging` / `production`) never share credentials or data.
+
+## Completeness
+
+A feature is done when it works, is tested, typed, handles errors, is observable, is secure, is tenant-scoped, is documented, and can be deployed reproducibly. CI uses FakeLLM; live-model eval is separate.
+
+## Docs
+
+Significant decisions get a new ADR (do not silently rewrite accepted ones). Keep `docs/*` current. Do not add pgvector, Kubernetes, or an execute tool.

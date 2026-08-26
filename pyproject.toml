@@ -1,0 +1,69 @@
+[project]
+name = "merchantos"
+version = "0.1.0"
+description = "MerchantOS monorepo workspace root"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "httpx>=0.28",
+]
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/worker",
+    "packages/domain",
+    "packages/observability",
+    "packages/db",
+    "packages/queue",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["apps", "packages"]
+extend-exclude = [
+    "docs",
+    "packages/db/alembic/script.py.mako",
+    "packages/db/alembic/versions",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "apps"]
+markers = [
+    "integration: needs Compose Postgres/Redis (and optional ElasticMQ)",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = [
+    "merchantos_domain",
+    "merchantos_observability",
+    "merchantos_db",
+    "merchantos_queue",
+    "merchantos_api",
+    "merchantos_worker",
+]
+mypy_path = [
+    "packages/domain/src",
+    "packages/observability/src",
+    "packages/db/src",
+    "packages/queue/src",
+    "apps/api/src",
+    "apps/worker/src",
+]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "botocore", "botocore.*"]
+ignore_missing_imports = true

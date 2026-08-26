@@ -1,0 +1,16 @@
+---
+description: Pointer to canonical MerchantOS system design
+alwaysApply: true
+---
+
+# Canonical source
+
+Follow [`SYSTEM_DESIGN.md`](../../SYSTEM_DESIGN.md) as the engineering source of truth.
+
+Type-level invariant: [`docs/contracts.md`](../../docs/contracts.md).
+
+If a rule, ADR, or `docs/*` file disagrees with `SYSTEM_DESIGN.md`, stop and reconcile — do not implement the contradiction.
+
+**LLM reasons. Deterministic services authorize, validate, persist, and execute.**
+
+The LLM may propose. It must not approve, create `ApprovalRecord`, construct `ApprovedAction`, pick a tenant, or call Shopify.

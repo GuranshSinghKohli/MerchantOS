@@ -1,0 +1,15 @@
+[project]
+name = "merchantos-observability"
+version = "0.1.0"
+description = "Structured JSON logging and request-id helpers"
+requires-python = ">=3.12"
+dependencies = [
+    "structlog>=24.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/merchantos_observability"]
