@@ -1,16 +1,33 @@
 # MerchantOS Agent Architecture
 
-**Status:** Accepted (Phase 7 specialists implemented 2026-08-26)  
+**Status:** Accepted (Phase 9 approval-gated mutations implemented 2026-08-26)  
 **Runtime:** LangGraph in the **agent** worker handler only  
 **Related:** [contracts.md](contracts.md), [mcp.md](mcp.md), [ADR 0008](adr/0008-llm-provider-port.md), [ADR 0012](adr/0012-capability-isolated-workers.md), [ADR 0013](adr/0013-proposal-vs-approval-types.md)
 
-Phase 7 registers analytics, inventory, and customer on the Phase 6 runtime. Strategy, Action Planner, and PolicyService remain specified and are **not registered**.
+Phase 8 coordinates the Phase 7 specialists through a bounded intelligence graph. Strategy, Action Planner, and PolicyService remain specified and are **not registered**.
 
 Agents reason. They do not authorize, calculate money, mutate Shopify, choose a tenant, create approvals, or execute actions.
 
 Policy is **not** an agent. It is `PolicyService` in `packages/app` and has no `LLMPort`.
 
-## Graph
+## Intelligence graph (Phase 8)
+
+```
+POST /api/v1/intelligence/query
+  → AgentRun (run_kind=intelligence)
+  → select allowlisted specialists
+  → Analytics / Inventory / Customer (as selected)
+  → evidence aggregation + contradiction detection
+  → synthesis (OBSERVATION | CORRELATION | INFERENCE | HYPOTHESIS)
+  → advisory Recommendation
+  → STOP
+```
+
+Selection is deterministic keyword matching intersected with `SPECIALIST_NAMES`. The model cannot load arbitrary agent classes. Maximum 3 specialists, 8 LLM schema retries across the run, 8s per LLM call, 90s intelligence lease.
+
+Traceability: Recommendation → insight → finding → evidence → MCP tool → deterministic analytics.
+
+## Ask graph
 
 ```
 POST /api/v1/ask  →  AgentRun PENDING + outbox  →  SQS {job_kind, job_id}
@@ -44,7 +61,7 @@ POST /api/v1/ask  →  AgentRun PENDING + outbox  →  SQS {job_kind, job_id}
                     → AgentRun.COMPLETED
 ```
 
-Merchant `POST /api/v1/approvals/{action_id}/approve` is **outside** this graph.
+Merchant `POST /api/v1/actions/{action_id}/approve` (alias `/api/v1/approvals/{action_id}/approve`) is **outside** this graph. Phase 9 does not register Strategy or Action Planner; proposals are created by `ActionService.propose` from a merchant session.
 
 ## Shared state
 
@@ -115,7 +132,11 @@ Deterministic ceiling in `packages/agents` evidence helpers:
 
 The model proposes a band and may only keep or lower it. Scores: HIGH 0.85, MEDIUM 0.55, LOW 0.25.
 
-Bounds: 5 specialist tool calls, 2 LLM schema retries, 8s LLM timeout, 40s graph budget, 3 job attempts.
+Opposite-sign `*_growth_pct` facts become unresolved `Contradiction` objects and force LOW.
+
+Recommendation priority is CRITICAL / HIGH / MEDIUM / LOW. Deterministic ceiling: stockout + revenue facts can reach CRITICAL; revenue decline can reach HIGH; otherwise MEDIUM. The model may only stay or go lower.
+
+Bounds: 5 specialist tool calls, 2 LLM schema retries, 8s LLM timeout, 40s specialist budget, 90s intelligence lease, 3 job attempts, 3 specialists per intelligence run.
 
 ### Strategy
 

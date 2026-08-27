@@ -1,3 +1,4 @@
+from merchantos_db.actions import ActionIdentity, ActionRepository
 from merchantos_db.agent_runs import AgentRunIdentity, AgentRunRepository
 from merchantos_db.analytics import AnalyticsRepository
 from merchantos_db.commerce import (
@@ -20,6 +21,8 @@ from merchantos_db.jobs import JobRepository, SyncJobIdentity
 from merchantos_db.repositories import IdentityRepository, InstallView, SessionRecord
 
 __all__ = [
+    "ActionIdentity",
+    "ActionRepository",
     "AgentRunIdentity",
     "AgentRunRepository",
     "AnalyticsRepository",

@@ -11,6 +11,7 @@ from merchantos_llm import LLMPort
 from merchantos_mcp import ToolRegistry
 from merchantos_queue import QueuePort
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import ShopifyMutator
 from merchantos_shopify.reader import ShopifyReader
 from sqlalchemy import Engine
 
@@ -33,6 +34,13 @@ class AgentCapabilities:
     llm: LLMPort
 
 
+@dataclass(frozen=True)
+class ExecutionCapabilities:
+    """ShopifyMutator only. No LLMPort, ToolRegistry, or raw credential store."""
+
+    mutator: ShopifyMutator
+
+
 def fake_agent_capabilities() -> AgentCapabilities:
     from merchantos_llm import FakeLLM, default_orchestrator_turns
     from merchantos_mcp import build_commerce_registry
@@ -53,5 +61,6 @@ class WorkerRuntime:
     sync: SyncCapabilities
     webhook: WebhookCapabilities
     agent: AgentCapabilities
+    execution: ExecutionCapabilities
     encryptor: TokenEncryptor | None
     owner: str

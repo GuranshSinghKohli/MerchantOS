@@ -1,0 +1,10 @@
+image_tag        = "unreleased"
+enable_services  = false
+llm_provider     = "fake"
+github_repo      = "GuranshSinghKohli/MerchantOS"
+alarm_email      = ""
+domain_name      = ""
+public_base_url  = ""
+# shopify_api_key    = ""
+# shopify_api_secret = ""
+# openai_api_key     = ""

@@ -7,6 +7,8 @@ from merchantos_domain import (
     EvidenceItem,
     FindingCategory,
     FindingSeverity,
+    InsightKind,
+    RecommendationPriority,
 )
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -69,4 +71,45 @@ class SpecialistSynthesisOutput(BaseModel):
     next_steps: list[str] = Field(default_factory=list, max_length=8)
     uncertainty: str = Field(default="", max_length=500)
     insufficient_data: bool = False
+    proposed_confidence: ConfidenceBand = ConfidenceBand.MEDIUM
+
+
+class InsightDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(max_length=160)
+    description: str = Field(max_length=800)
+    kind: InsightKind
+    evidence_ids: list[str] = Field(min_length=1, max_length=8)
+    finding_ids: list[str] = Field(default_factory=list, max_length=8)
+    limitations: list[str] = Field(default_factory=list, max_length=4)
+
+
+class IntelligenceSynthesisOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    executive_summary: str = Field(default="", max_length=4000)
+    insights: list[InsightDraft] = Field(default_factory=list, max_length=8)
+    limitations: list[str] = Field(default_factory=list, max_length=8)
+    proposed_confidence: ConfidenceBand = ConfidenceBand.MEDIUM
+
+
+class RecommendationDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(max_length=160)
+    recommendation: str = Field(max_length=800)
+    rationale: str = Field(max_length=800)
+    evidence_ids: list[str] = Field(min_length=1, max_length=8)
+    insight_ids: list[str] = Field(default_factory=list, max_length=8)
+    finding_ids: list[str] = Field(default_factory=list, max_length=8)
+    expected_objective: str = Field(max_length=240)
+    proposed_priority: RecommendationPriority = RecommendationPriority.MEDIUM
+    limitations: list[str] = Field(default_factory=list, max_length=4)
+
+
+class IntelligenceRecommendOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recommendations: list[RecommendationDraft] = Field(default_factory=list, max_length=6)
     proposed_confidence: ConfidenceBand = ConfidenceBand.MEDIUM

@@ -78,6 +78,12 @@ Phase 6: the orchestrator reasons through `LLMPort`. `AgentState` has no tenant,
 
 Phase 7: specialists bind `ToolPort.for_agent(analytics|inventory|customer)` from an allowlisted registry. Model output cannot load arbitrary agents. Merchant text is untrusted DATA. Findings must cite evidence ids extracted from tool output. Customer results must not include emails.
 
+Phase 8: the intelligence graph inherits the same trusted tenant. Specialist outputs and merchant fields remain untrusted DATA. Synthesis cannot merge tenants, load arbitrary agents, approve actions, or emit `ApprovedAction`. Emails are redacted before LLM context and from the public report. Execute/approve recommendation text is dropped.
+
+Phase 9: approval requires `TenantContext.from_session` and `session_bound=True`. `ApprovedAction` cannot be constructed from LLM output. Execution uses `ExecutionCapabilities` (mutator, no LLM) and typed `ShopifyMutator` methods only. Prompt text in titles or rationale is stored as data; it cannot change risk, tenant, or execute. Duplicate approve and duplicate queue delivery are idempotent.
+
+Phase 10: Terraform-only AWS. RDS and Redis are private. ECS tasks are in public subnets without NAT ([ADR 0024](adr/0024-cost-optimized-aws-network.md)); inbound is security-group limited to the ALB. Images are non-root and contain no secrets. Secrets Manager JSON is injected by the ECS execution role; the API task role cannot read Secrets Manager or the DLQ. GitHub deploys via OIDC on `main` only. Shopify OAuth URLs are not switched to AWS until HTTPS is verified.
+
 ## Prompt injection
 
 Product titles, descriptions, customer notes, order attributes, and the merchant question may contain instructions.
@@ -114,7 +120,7 @@ Assigned from `action.type` and affected-row count, not from the model.
 | Level | Examples | V1 behavior |
 |-------|----------|-------------|
 | LOW | Internal insight (not an ActionType) | Persist internally; **never** Shopify write |
-| MEDIUM | Future non-price Shopify-adjacent writes | `Action.PROPOSED` + merchant approval |
+| MEDIUM | Product title, description, tags, status (`ACTIVE`/`DRAFT`) | `Action.PROPOSED` + merchant approval |
 | HIGH | Single-resource price or discount change | `Action.PROPOSED` + merchant approval |
 | CRITICAL | Deletes, bulk price/discount | `Action.BLOCKED` |
 

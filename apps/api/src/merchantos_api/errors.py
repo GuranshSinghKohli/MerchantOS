@@ -41,6 +41,8 @@ def register_exception_handlers(app: FastAPI) -> None:
             title = "Not Found"
         elif status == 409:
             title = "Conflict"
+        elif status == 422:
+            title = "Unprocessable Entity"
         elif status == 503:
             title = "Service Unavailable"
         return problem(

@@ -9,8 +9,10 @@ from merchantos_api.session_cookie import SESSION_COOKIE
 from merchantos_db import CommerceRepository, JobRepository, session_scope
 from merchantos_domain import TenantContext
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import FakeShopifyMutator
 from merchantos_shopify.testing import FakeShopifyReader
 from merchantos_worker.capabilities import (
+    ExecutionCapabilities,
     SyncCapabilities,
     WebhookCapabilities,
     WorkerRuntime,
@@ -71,6 +73,7 @@ def test_sync_worker_from_api_outbox(postgres: None) -> None:
         sync=SyncCapabilities(reader=reader),
         webhook=WebhookCapabilities(reader=reader),
         agent=fake_agent_capabilities(),
+        execution=ExecutionCapabilities(mutator=FakeShopifyMutator()),
         encryptor=encryptor,
         owner="api-sync",
     )

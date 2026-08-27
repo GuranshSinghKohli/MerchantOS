@@ -36,6 +36,7 @@ class AgentRunRepository:
         ctx: TenantContext,
         *,
         question: str,
+        run_kind: str = "ask",
     ) -> AgentRun:
         with tenant_scope(self._session, ctx.merchant_id):
             row = AgentRun(
@@ -45,6 +46,7 @@ class AgentRunRepository:
                 user_id=ctx.user_id,
                 request_id=ctx.request_id,
                 question=question,
+                run_kind=run_kind,
                 status=AgentRunStatus.PENDING.value,
                 scopes=list(ctx.scopes),
             )
@@ -81,15 +83,20 @@ class AgentRunRepository:
             scopes=tuple(row.scopes or ()),
         )
 
-    def list_for_tenant(self, ctx: TenantContext, *, limit: int = 20) -> list[AgentRun]:
+    def list_for_tenant(
+        self, ctx: TenantContext, *, limit: int = 20, run_kind: str | None = None
+    ) -> list[AgentRun]:
         with tenant_scope(self._session, ctx.merchant_id):
+            clauses = [
+                AgentRun.merchant_id == ctx.merchant_id,
+                AgentRun.store_id == ctx.store_id,
+            ]
+            if run_kind is not None:
+                clauses.append(AgentRun.run_kind == run_kind)
             return list(
                 self._session.scalars(
                     select(AgentRun)
-                    .where(
-                        AgentRun.merchant_id == ctx.merchant_id,
-                        AgentRun.store_id == ctx.store_id,
-                    )
+                    .where(*clauses)
                     .order_by(AgentRun.created_at.desc())
                     .limit(limit)
                 )

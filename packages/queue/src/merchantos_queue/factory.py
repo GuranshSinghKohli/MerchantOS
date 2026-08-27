@@ -1,6 +1,9 @@
+from merchantos_queue.aws import AwsSqsQueue
 from merchantos_queue.elasticmq_dev import ElasticMqDevQueue
 from merchantos_queue.memory import InMemoryQueue
 from merchantos_queue.port import QueuePort
+
+_AWS_ENVS = frozenset({"staging", "production"})
 
 
 def create_queue(
@@ -11,8 +14,13 @@ def create_queue(
     access_key_id: str,
     secret_access_key: str,
     environment: str,
+    queue_url: str | None = None,
 ) -> QueuePort:
-    """Return InMemory when unset, ElasticMQ only in dev with a local endpoint."""
+    """InMemory or ElasticMQ in dev. AWS SQS in staging/production via task role."""
+    if environment in _AWS_ENVS:
+        if endpoint_url:
+            raise RuntimeError("SQS_ENDPOINT_URL is not allowed outside dev")
+        return AwsSqsQueue(queue_name=queue_name, region=region, queue_url=queue_url)
     if not endpoint_url:
         return InMemoryQueue()
     if environment != "dev":

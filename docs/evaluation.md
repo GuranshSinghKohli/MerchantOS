@@ -4,7 +4,7 @@
 **Runtime:** `apps/agentbench` CLI (Phase 6+)  
 **Related:** [agents.md](agents.md), [mcp.md](mcp.md)
 
-Phase 7 expands `apps/agentbench` with FakeLLM scenarios for analytics, inventory, and customer (straightforward, missing data, prompt injection, tenant manipulation, unsupported claims). CI must not call a paid model.
+Phase 8 expands `apps/agentbench` with FakeLLM intelligence scenarios: revenue decline, inventory concern, customer change, broad health, conflicting evidence, insufficient data, prompt injection, cross-tenant attempts, and unsupported causal claims. Phase 9 keeps `forbid_approval` on those scenarios and adds integration tests that an injected title cannot approve or mutate. CI must not call a paid model.
 
 AgentBench proves agents work through versioned, repeatable scenarios — not a single hand-crafted demo.
 

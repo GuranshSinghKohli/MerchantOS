@@ -240,3 +240,103 @@ def specialist_llm(*tool_names: str, summary: str, category: str, **kwargs: Any)
     return FakeLLM(
         [plan_turn(*tool_names), synth_turn(summary=summary, category=category, **kwargs)]
     )
+
+
+def intel_synth_turn(
+    *agents: str,
+    kind: str = "CORRELATION",
+    description: str | None = None,
+    evidence_ids: list[str] | None = None,
+    proposed: str = "MEDIUM",
+    extra_insights: list[dict[str, object]] | None = None,
+) -> FakeTurn:
+    refs = evidence_ids or [f"{name}:ev_1" for name in agents] or ["analytics:ev_1"]
+    insight = {
+        "title": "Cross-agent snapshot",
+        "description": description or "Specialist metrics coincide in the selected window.",
+        "kind": kind,
+        "evidence_ids": refs,
+        "finding_ids": [f"{name}:f_1" for name in agents],
+        "limitations": [],
+    }
+    return FakeTurn(
+        {
+            "executive_summary": insight["description"],
+            "insights": [insight, *(extra_insights or [])],
+            "limitations": [],
+            "proposed_confidence": proposed,
+        }
+    )
+
+
+def intel_recommend_turn(
+    *agents: str,
+    title: str = "Review the latest specialist signals",
+    recommendation: str = "Investigate the metrics cited by the selected specialists.",
+    evidence_ids: list[str] | None = None,
+    priority: str = "MEDIUM",
+    extra: list[dict[str, object]] | None = None,
+) -> FakeTurn:
+    refs = evidence_ids or [f"{name}:ev_1" for name in agents] or ["analytics:ev_1"]
+    rec = {
+        "title": title,
+        "recommendation": recommendation,
+        "rationale": "Evidence from allowlisted tools supports a review.",
+        "evidence_ids": refs,
+        "insight_ids": ["ins_1"],
+        "finding_ids": [f"{name}:f_1" for name in agents],
+        "expected_objective": "Understand current performance",
+        "proposed_priority": priority,
+        "limitations": ["Advisory only"],
+    }
+    return FakeTurn(
+        {
+            "recommendations": [rec, *(extra or [])],
+            "proposed_confidence": "MEDIUM",
+        }
+    )
+
+
+def intelligence_llm(
+    *agents: str,
+    tools: dict[str, tuple[str, ...]] | None = None,
+    description: str | None = None,
+    kind: str = "CORRELATION",
+    recommendation: str | None = None,
+    priority: str = "MEDIUM",
+    proposed_confidence: str = "MEDIUM",
+    extra_recommend: list[dict[str, object]] | None = None,
+) -> FakeLLM:
+    mapping = tools or {
+        "analytics": ("get_revenue_metrics",),
+        "inventory": ("get_inventory_health",),
+        "customer": ("get_customer_metrics",),
+    }
+    category = {"analytics": "revenue", "inventory": "inventory", "customer": "customer"}
+    turns: list[FakeTurn] = []
+    for name in agents:
+        turns.append(plan_turn(*mapping.get(name, ("get_store_overview",))))
+        turns.append(
+            synth_turn(
+                summary=f"{name} metrics are taken from allowlisted tools.",
+                category=category.get(name, "other"),
+            )
+        )
+    turns.append(
+        intel_synth_turn(
+            *agents,
+            kind=kind if len(agents) > 1 or kind != "CORRELATION" else "OBSERVATION",
+            description=description,
+            proposed=proposed_confidence,
+        )
+    )
+    turns.append(
+        intel_recommend_turn(
+            *agents,
+            recommendation=recommendation
+            or "Investigate the metrics cited by the selected specialists.",
+            priority=priority,
+            extra=extra_recommend,
+        )
+    )
+    return FakeLLM(turns)

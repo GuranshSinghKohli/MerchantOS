@@ -10,8 +10,10 @@ from merchantos_db.models import OutboxMessage, WebhookEvent
 from merchantos_domain import JobKind, QueueMessage, TenantContext
 from merchantos_queue.memory import InMemoryQueue
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import FakeShopifyMutator
 from merchantos_shopify.testing import FakeShopifyReader
 from merchantos_worker.capabilities import (
+    ExecutionCapabilities,
     SyncCapabilities,
     WebhookCapabilities,
     WorkerRuntime,
@@ -62,6 +64,7 @@ def test_webhook_job_is_async_and_idempotent(postgres) -> None:
         sync=SyncCapabilities(reader=reader),
         webhook=WebhookCapabilities(reader=reader),
         agent=fake_agent_capabilities(),
+        execution=ExecutionCapabilities(mutator=FakeShopifyMutator()),
         encryptor=encryptor,
         owner="wh",
     )

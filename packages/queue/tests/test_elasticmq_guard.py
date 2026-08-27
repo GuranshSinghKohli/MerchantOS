@@ -15,7 +15,7 @@ def test_dev_adapter_rejects_aws_endpoint() -> None:
 
 
 def test_factory_rejects_dev_adapter_outside_dev() -> None:
-    with pytest.raises(RuntimeError, match="development-only"):
+    with pytest.raises(RuntimeError, match="not allowed outside dev"):
         create_queue(
             endpoint_url="http://localhost:9324",
             queue_name="jobs",

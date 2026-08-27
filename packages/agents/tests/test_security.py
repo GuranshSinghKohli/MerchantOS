@@ -140,6 +140,14 @@ def test_arbitrary_tools_sql_http_shell_rejected() -> None:
             )
 
 
+def test_intelligence_source_cannot_approve_or_mutate() -> None:
+    src = Path(__file__).resolve().parents[1] / "src" / "merchantos_agents"
+    text = (src / "intelligence.py").read_text()
+    for needle in ("ApprovedAction", "ShopifyMutator", "execute_approved_action"):
+        assert needle not in text
+    assert "run_intelligence" in dir(__import__("merchantos_agents"))
+
+
 def test_state_and_source_have_no_credentials() -> None:
     state = AgentState(run_id="r", request_id="q", question="hi")
     assert "token" not in state.model_dump()

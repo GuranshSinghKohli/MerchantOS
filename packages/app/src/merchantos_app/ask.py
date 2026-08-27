@@ -24,6 +24,7 @@ def _public(row: AgentRun) -> dict[str, object]:
         "status": row.status,
         "question": row.question,
         "classification": row.classification,
+        "run_kind": getattr(row, "run_kind", "ask"),
         "result": result,
         "error_code": row.error_code,
         "error_message": row.error_message,
@@ -37,26 +38,39 @@ class AskService:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def enqueue(self, ctx: TenantContext, question: str) -> dict[str, object]:
+    def enqueue(
+        self, ctx: TenantContext, question: str, *, run_kind: str = "ask"
+    ) -> dict[str, object]:
         cleaned = question.strip()
         if not cleaned:
             raise DomainError("question is required")
         if len(cleaned) > MAX_QUESTION_CHARS:
             raise DomainError(f"question cannot exceed {MAX_QUESTION_CHARS} characters")
+        if run_kind not in {"ask", "intelligence"}:
+            raise DomainError("invalid run kind")
         with session_scope(self._engine) as db:
-            row = AgentRunRepository(db).enqueue(ctx, question=cleaned)
+            row = AgentRunRepository(db).enqueue(ctx, question=cleaned, run_kind=run_kind)
             return _public(row)
 
-    def get(self, ctx: TenantContext, run_id: UUID) -> dict[str, object]:
+    def get(
+        self, ctx: TenantContext, run_id: UUID, *, run_kind: str | None = None
+    ) -> dict[str, object]:
         with session_scope(self._engine) as db:
             row = AgentRunRepository(db).get_for_tenant(ctx, run_id)
             if row is None:
                 raise NotFoundError("agent run not found")
+            if run_kind is not None and getattr(row, "run_kind", "ask") != run_kind:
+                raise NotFoundError("agent run not found")
             return _public(row)
 
-    def list_runs(self, ctx: TenantContext) -> list[dict[str, object]]:
+    def list_runs(
+        self, ctx: TenantContext, *, run_kind: str | None = None
+    ) -> list[dict[str, object]]:
         with session_scope(self._engine) as db:
-            return [_public(row) for row in AgentRunRepository(db).list_for_tenant(ctx)]
+            return [
+                _public(row)
+                for row in AgentRunRepository(db).list_for_tenant(ctx, run_kind=run_kind)
+            ]
 
     def cancel(self, ctx: TenantContext, run_id: UUID) -> dict[str, object]:
         with session_scope(self._engine) as db:

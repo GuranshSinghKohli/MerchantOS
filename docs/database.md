@@ -195,11 +195,12 @@ Proactive findings: `severity`, `confidence`, `title`, `body`, `evidence JSONB`,
 
 ### agent_runs
 
-Implemented in Alembic `0006_phase6`. Phase 7 stores the specialist name in `classification` and structured `AgentResult` fields in `result_json`. `WAITING_APPROVAL` remains unused.
+Implemented in Alembic `0006_phase6`. Phase 7 stores the specialist name in `classification` and structured `AgentResult` fields in `result_json`. Phase 8 adds `run_kind` (`ask` \| `intelligence`) in Alembic `0007_phase8` and stores `IntelligenceReport` in `result_json` (no tenant ids, no raw LLM context). `WAITING_APPROVAL` remains unused.
 
 | Column | Notes |
 |--------|-------|
 | question | merchant text (untrusted) |
+| run_kind | `ask` \| `intelligence` |
 | status | `PENDING` \| `RUNNING` \| `WAITING_APPROVAL` \| `COMPLETED` \| `FAILED` \| `CANCELLED` |
 | lease_owner, lease_until | single-flight; reaper after expiry |
 | classification, plan | JSONB |
@@ -224,11 +225,11 @@ PRD fields: `problem`, `evidence`, `hypothesis`, `proposed_action`, `expected_im
 
 ### actions
 
-State: `PROPOSED` \| `APPROVED` \| `QUEUED` \| `EXECUTING` \| `COMPLETED` \| `FAILED` \| `BLOCKED`.  
-`type` is an allowlisted enum. `payload`, `payload_hash`, `before_state`, `after_state` are written by `SnapshotService` at `PROPOSED` and are immutable (trigger).  
+State: `PROPOSED` \| `APPROVED` \| `QUEUED` \| `EXECUTING` \| `COMPLETED` \| `FAILED` \| `BLOCKED` \| `REJECTED` \| `EXPIRED` \| `CONFLICT`.  
+`action_type` is an allowlisted enum. `payload`, `payload_hash`, `before_state`, `after_state` are written by `SnapshotService` at `PROPOSED`.  
 `lease_owner`, `lease_until` for `EXECUTING`.  
 UNIQUE(`merchant_id`, `idempotency_key`).  
-Agents insert `PROPOSED` or `BLOCKED` only via `create_action_plan` → application service. They cannot set `APPROVED`.
+Phase 9 creates `PROPOSED` or `BLOCKED` from `ActionService.propose` (merchant session). Agents cannot set `APPROVED`.
 
 ### approvals
 
@@ -239,7 +240,7 @@ INSERT from the approval API role/service only. Agents have no write path.
 
 ### action_results
 
-`ok`, `shopify_request_id`, `mutation_name`, `error_code`, `response_redacted`.
+`ok`, `shopify_request_id`, `mutation_name`, `error_code`, `verified`, `before_state`, `after_state`, `response_redacted`. Unique per `action_id`.
 
 Creating merchant approval and transitioning `Action` to `APPROVED` is one transaction, plus an outbox row for the execution queue. Execution result and audit row are written together; Shopify success + DB failure retries on `action_id`.
 

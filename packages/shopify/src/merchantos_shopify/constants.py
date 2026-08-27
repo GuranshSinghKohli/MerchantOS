@@ -3,10 +3,9 @@
 Re-validated against https://shopify.dev/docs/api/usage/access-scopes
 and GraphQL Admin API 2026-07 on 2026-08-25.
 
-Write scopes are omitted until the demo mutation (discount vs price) is locked.
-`write_*` implicitly includes the matching `read_*` — we must not request write
-just to get read. `read_all_orders` is out of V1 (Partner permission + 60-day
-window is an explicit constraint).
+`write_products` is requested for Phase 9 allowlisted product metadata mutations.
+`write_*` implicitly includes the matching `read_*`. Price, discount, order, and
+customer write scopes stay omitted. `read_all_orders` is out of V1.
 """
 
 ADMIN_API_VERSION = "2026-07"
@@ -16,6 +15,7 @@ SHOP_DOMAIN_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9\-]*\.myshopify\.com$"
 
 INSTALL_SCOPES: tuple[str, ...] = (
     "read_products",
+    "write_products",
     "read_orders",
     "read_customers",
     "read_inventory",

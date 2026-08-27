@@ -9,9 +9,11 @@ from merchantos_domain import AgentRunStatus
 from merchantos_llm import FakeLLM, default_orchestrator_turns
 from merchantos_mcp import build_commerce_registry
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import FakeShopifyMutator
 from merchantos_shopify.testing import FakeShopifyReader
 from merchantos_worker.capabilities import (
     AgentCapabilities,
+    ExecutionCapabilities,
     SyncCapabilities,
     WebhookCapabilities,
     WorkerRuntime,
@@ -65,6 +67,7 @@ def test_ask_lifecycle_and_isolation(postgres: None) -> None:
             tools=build_commerce_registry(AnalyticsService(db_engine())),
             llm=FakeLLM(default_orchestrator_turns()),
         ),
+        execution=ExecutionCapabilities(mutator=FakeShopifyMutator()),
         encryptor=encryptor,
         owner="ask-test",
     )
@@ -106,6 +109,7 @@ def test_cancel_pending_and_idempotent_complete(postgres: None) -> None:
             tools=build_commerce_registry(AnalyticsService(db_engine())),
             llm=FakeLLM(default_orchestrator_turns()),
         ),
+        execution=ExecutionCapabilities(mutator=FakeShopifyMutator()),
         encryptor=encryptor,
         owner="ask-cancel",
     )

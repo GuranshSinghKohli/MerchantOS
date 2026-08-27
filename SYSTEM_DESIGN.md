@@ -897,7 +897,11 @@ AWS infrastructure must be reproducible.
 
 Use Terraform.
 
+Do not mix CDK or CloudFormation.
+
 Do not manually create production infrastructure unless documented and later codified.
+
+V1 network: no NAT Gateway; ECS tasks use public subnets and public IPs; RDS and Redis stay private ([ADR 0024](docs/adr/0024-cost-optimized-aws-network.md)).
 
 Infrastructure should be separated by environment:
 

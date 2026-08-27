@@ -9,9 +9,9 @@ application_url = "https://example.ngrok.app"
 embedded = false
 
 [access_scopes]
-# Re-validated against https://shopify.dev/docs/api/usage/access-scopes (2026-08-25).
-# Read-only for Phase 2. Write scopes wait until the demo mutation is locked.
-scopes = "read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts"
+# Re-validated against https://shopify.dev/docs/api/usage/access-scopes (2026-08-26).
+# write_products is limited to allowlisted product metadata mutations (Phase 9).
+scopes = "read_products,write_products,read_orders,read_customers,read_inventory,read_locations,read_discounts"
 
 [auth]
 redirect_urls = [

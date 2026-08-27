@@ -8,8 +8,10 @@ from merchantos_db import CommerceRepository, JobRepository, session_scope
 from merchantos_domain import TenantContext, TransientJobError
 from merchantos_queue import create_queue
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import FakeShopifyMutator
 from merchantos_shopify.testing import FakeShopifyReader, sample_product
 from merchantos_worker.capabilities import (
+    ExecutionCapabilities,
     SyncCapabilities,
     WebhookCapabilities,
     WorkerRuntime,
@@ -50,6 +52,7 @@ def _runtime(engine, reader, queue) -> WorkerRuntime:
         sync=SyncCapabilities(reader=reader),
         webhook=WebhookCapabilities(reader=reader),
         agent=fake_agent_capabilities(),
+        execution=ExecutionCapabilities(mutator=FakeShopifyMutator()),
         encryptor=_encryptor(),
         owner="test-worker",
     )

@@ -32,6 +32,7 @@ def seed_installed_store(
         refresh_expires_at=None,
         scopes=(
             "read_products",
+            "write_products",
             "read_orders",
             "read_customers",
             "read_inventory",

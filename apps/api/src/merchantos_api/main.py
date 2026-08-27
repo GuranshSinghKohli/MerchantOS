@@ -8,10 +8,12 @@ from merchantos_observability import configure_logging, get_logger
 from merchantos_api import __version__
 from merchantos_api.errors import register_exception_handlers
 from merchantos_api.middleware import RequestIdMiddleware
+from merchantos_api.routers.actions import router as actions_router
 from merchantos_api.routers.analytics import router as analytics_router
 from merchantos_api.routers.ask import router as ask_router
 from merchantos_api.routers.auth import router as auth_router
 from merchantos_api.routers.health import router as health_router
+from merchantos_api.routers.intelligence import router as intelligence_router
 from merchantos_api.routers.me import router as me_router
 from merchantos_api.routers.sync import router as sync_router
 from merchantos_api.routers.webhooks import router as webhook_router
@@ -50,6 +52,8 @@ def create_app() -> FastAPI:
     app.include_router(sync_router)
     app.include_router(analytics_router)
     app.include_router(ask_router)
+    app.include_router(intelligence_router)
+    app.include_router(actions_router)
     app.include_router(webhook_router)
     return app
 

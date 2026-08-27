@@ -181,6 +181,7 @@ class Product(Base):
     )
     shopify_gid: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(Text, nullable=False)
     vendor: Mapped[str] = mapped_column(Text, nullable=False, default="")
     product_type: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -403,6 +404,7 @@ class AgentRun(Base):
     )
     request_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
+    run_kind: Mapped[str] = mapped_column(Text, nullable=False, default="ask")
     status: Mapped[str] = mapped_column(Text, nullable=False, default="PENDING")
     scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     classification: Mapped[str | None] = mapped_column(Text)
@@ -460,6 +462,93 @@ class OutboxMessage(Base):
     job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Action(Base):
+    __tablename__ = "actions"
+    __table_args__ = (
+        UniqueConstraint("merchant_id", "idempotency_key"),
+        Index("ix_actions_merchant_created", "merchant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid7)
+    merchant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False
+    )
+    store_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("stores.id"), nullable=False
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("merchant_users.id")
+    )
+    request_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    action_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="PROPOSED")
+    risk_level: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    resource_gid: Mapped[str] = mapped_column(Text, nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    source_recommendation_id: Mapped[str | None] = mapped_column(Text)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    before_state_json: Mapped[str] = mapped_column(Text, nullable=False)
+    after_state_json: Mapped[str] = mapped_column(Text, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    lease_owner: Mapped[str | None] = mapped_column(Text)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_code: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Approval(Base):
+    __tablename__ = "approvals"
+    __table_args__ = (UniqueConstraint("action_id"),)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid7)
+    merchant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False
+    )
+    action_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("actions.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    frozen_payload_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    risk_level: Mapped[str] = mapped_column(Text, nullable=False)
+    decided_by: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("merchant_users.id"), nullable=False
+    )
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ActionResultRow(Base):
+    __tablename__ = "action_results"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid7)
+    merchant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False
+    )
+    action_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("actions.id"), nullable=False, unique=True
+    )
+    ok: Mapped[bool] = mapped_column(nullable=False, default=False)
+    mutation_name: Mapped[str] = mapped_column(Text, nullable=False)
+    shopify_request_id: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(Text)
+    verified: Mapped[bool] = mapped_column(nullable=False, default=False)
+    before_state_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    after_state_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    response_redacted: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class IdempotencyKey(Base):

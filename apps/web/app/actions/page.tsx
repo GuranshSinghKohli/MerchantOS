@@ -1,5 +1,5 @@
-import { ActionsPlaceholder } from "@/components/section-view";
+import { ActionsView } from "@/components/actions-view";
 
 export default function ActionsPage() {
-  return <ActionsPlaceholder />;
+  return <ActionsView />;
 }

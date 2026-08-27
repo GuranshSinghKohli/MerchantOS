@@ -1,0 +1,73 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  images:
+    if: ${{ vars.AWS_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        run: |
+          docker buildx build --platform linux/arm64 --load \
+            -f "apps/${{ matrix.service }}/Dockerfile" \
+            -t "local/${{ matrix.service }}:${{ github.sha }}" .
+      - name: Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: local/${{ matrix.service }}:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+      - name: Push immutable tag
+        run: |
+          dest="${{ vars.ECR_REGISTRY }}/${{ vars.ECR_PREFIX }}/${{ matrix.service }}:${{ github.sha }}"
+          docker tag "local/${{ matrix.service }}:${{ github.sha }}" "$dest"
+          docker push "$dest"
+
+  migrate-and-deploy:
+    if: ${{ vars.AWS_ROLE_ARN != '' }}
+    needs: images
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - name: Deploy immutable images
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          TAG: ${{ github.sha }}
+          REGISTRY: ${{ vars.ECR_REGISTRY }}
+          PREFIX: ${{ vars.ECR_PREFIX }}
+        run: bash scripts/ecs-deploy.sh
+      - name: Migrate
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          SUBNETS: ${{ vars.ECS_SUBNETS }}
+          SECURITY_GROUP: ${{ vars.ECS_SECURITY_GROUP }}
+          MIGRATE_TASK: ${{ vars.MIGRATE_TASK_FAMILY }}
+        run: bash scripts/ecs-migrate.sh
+      - name: Smoke
+        run: bash scripts/smoke.sh "${{ vars.PUBLIC_URL }}"

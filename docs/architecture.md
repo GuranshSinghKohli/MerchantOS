@@ -2,7 +2,7 @@
 
 **Status:** Accepted for V1 planning  
 **Sources:** [SYSTEM_DESIGN.md](../SYSTEM_DESIGN.md), PRD v1.0, [contracts.md](contracts.md)  
-**Last updated:** 2026-08-26 (Phase 6 LangGraph agent runtime)
+**Last updated:** 2026-08-26 (Phase 9 human-approved product mutations)
 
 MerchantOS is an AI-native commerce operating system for Shopify merchants. It is a real Shopify application, not a chatbot, analytics clone, or Shopify Admin replacement.
 
@@ -166,7 +166,7 @@ Application service
 V1 scopes (re-validate against official docs in the OAuth phase):
 
 - Read: `read_products`, `read_orders`, `read_customers`, `read_inventory`, `read_locations`, `read_discounts`
-- Write: exactly one of `write_discounts` or `write_products`, chosen when the demo mutation is locked
+- Write: `write_products` for allowlisted product metadata mutations only ([ADR 0023](adr/0023-phase9-human-approved-mutations.md))
 - Out of V1: `write_orders`, `write_customers`, `read_all_orders` (60-day order window is an explicit constraint)
 
 Offline access tokens are used for webhooks, sync, and execution. Tokens are envelope-encrypted and stored in `shopify_credentials`, never sent to the browser or the LLM.
@@ -258,7 +258,7 @@ Server Components for first paint. TanStack Query loads analytics (query keys in
 
 Design direction: premium production B2B (Shopify Admin, Linear, Vercel). Prioritize hierarchy, typography, responsive layout, accessibility, subtle motion, and polished loading/empty/error states. No dashboard screens in this ADR — Phase 4 implements routes.
 
-Phase 4 routes: `/`, `/analytics`, `/products`, `/inventory`, `/customers`, `/insights`, `/actions` (placeholder), `/settings`, `/install`. Ask/approvals/runs wait for later phases.
+Phase 9 routes: `/`, `/analytics`, `/products`, `/inventory`, `/customers`, `/insights`, `/approvals`, `/actions`, `/settings`, `/install`. Ask/agent-runs wait for later product screens.
 
 The web app talks only to MerchantOS `/api/v1`. It never calls Shopify.
 
@@ -270,7 +270,7 @@ Financial metrics (revenue, AOV, margin, inventory quantities) are computed in a
 
 ## 12. AWS
 
-Target: ALB → ECS Fargate (api + worker) in private subnets with **NAT egress** to Shopify and the LLM provider → RDS PostgreSQL, ElastiCache Redis, SQS + DLQ, S3, Secrets Manager, CloudWatch, OpenTelemetry, ACM, ECR. Terraform per environment (`dev` Compose with Postgres, Redis, and ElasticMQ before the first async feature; `staging`, `production`). No Kubernetes in V1 ([ADR 0006](adr/0006-ecs-fargate-not-kubernetes.md)). No pgvector until knowledge search is real.
+Target: ALB → ECS Fargate (api + worker + web) in **public subnets with task public IPs** (no NAT Gateway; [ADR 0024](adr/0024-cost-optimized-aws-network.md)) → private RDS PostgreSQL, private ElastiCache Redis, SQS + DLQ, Secrets Manager, CloudWatch, ACM when a domain exists, ECR. Terraform per environment (`dev` Compose with Postgres, Redis, and ElasticMQ; `staging`, `production`). No Kubernetes in V1 ([ADR 0006](adr/0006-ecs-fargate-not-kubernetes.md)). No pgvector until knowledge search is real.
 
 ## 13. Testing strategy
 
@@ -293,7 +293,7 @@ Every important operation carries `request_id`, `trace_id`, `agent_run_id`, `too
 
 - Demo mutation: reduce discount depth vs change a variant price (locks write scope).
 - AWS account, region (default `us-east-1` if unset), and whether staging is required before first Shopify install.
-- Production web hosting: ECS with the API (default) vs a separate frontend host.
+- Production web hosting: **decided in Phase 10** — ECS Fargate `web` behind the same ALB.
 - Shopify Partner / Dev Dashboard app not created yet.
 
 ## 16. Phase 1
@@ -489,3 +489,71 @@ POST /api/v1/ask
 Specialists reason only. They use Phase 5 read tools and the Phase 6 LangGraph runtime. No Strategy, ActionPlanner, approvals, or Shopify mutations.
 
 Confidence is a deterministic HIGH/MEDIUM/LOW ceiling; the model may only stay or go lower. Findings without valid evidence ids are dropped.
+
+## 23. Phase 8
+
+**Status:** Closed 2026-08-26. Intelligence, cross-agent synthesis, and advisory recommendations.
+
+```
+POST /api/v1/intelligence/query
+  → AgentRun PENDING (run_kind=intelligence) + outbox
+  → SQS {job_kind=agent_run, job_id}
+  → TenantContext.from_job_row
+  → allowlisted specialist selection (analytics | inventory | customer)
+  → Phase 7 specialists
+  → evidence aggregation + contradiction detection
+  → cross-agent synthesis
+  → advisory recommendations
+  → IntelligenceReport
+  → AgentRun COMPLETED | FAILED | CANCELLED
+```
+
+The LLM may recommend. It must not approve, construct `ApprovedAction`, or call Shopify. Insights are labeled OBSERVATION / CORRELATION / INFERENCE / HYPOTHESIS. Causal language in OBSERVATION or CORRELATION is downgraded to HYPOTHESIS. Ungrounded insights and execute/approve recommendations are dropped. Confidence and priority have deterministic ceilings. Public reports omit tenant ids and graph internals.
+
+Out of Phase 8: Strategy, ActionPlanner, merchant approvals, Shopify mutations, new MCP or LLM provider architecture.
+
+## 24. Phase 9
+
+**Status:** Closed 2026-08-26. Human approval, safe actions, and controlled Shopify product mutations.
+
+```
+POST /api/v1/actions
+  → SnapshotService (projection, not the model)
+  → PolicyService.evaluate (no LLM)
+  → Action.PROPOSED | BLOCKED
+Merchant POST /api/v1/actions/{id}/approve  (or /api/v1/approvals/{id}/approve)
+  → ApprovalService.decide(from_session, session_bound=True)
+  → Approval.APPROVED + Action.QUEUED + outbox {job_kind=action_execute, job_id}
+  → SQS
+  → ExecutionWorker (ExecutionCapabilities.mutator, no LLM)
+  → ApprovedAction.load
+  → conflict check vs live Shopify
+  → typed ShopifyMutator method
+  → re-read verification
+  → Action.COMPLETED | FAILED | CONFLICT | EXPIRED
+  → ActionResult + audit_events
+```
+
+Executable types: `update_product_title`, `update_product_description`, `update_product_tags`, `update_product_status` (`ACTIVE`|`DRAFT`). Price, discount, delete, refund, and bulk mutations are blocked and have no mutator.
+
+The LLM may propose field values only as untrusted merchant/API input. It cannot approve, construct `ApprovedAction`, change risk, pick a tenant, or call Shopify.
+
+Do not start Phase 11 from this document.
+
+## 25. Phase 10
+
+**Status:** IaC, images, CI, and observability are in-repo (2026-08-26). Live AWS apply, ECR push, HTTPS, and Shopify OAuth against a production URL are **operator-gated** and are not claimed complete.
+
+```
+Internet → ALB (HTTP, or HTTPS when domain_name is set)
+        ↙ api  /api/* /health /ready
+        ↘ web  default
+api/worker (Fargate, public subnet, public IP, no NAT)
+        → RDS (private) + Redis (private) + SQS + Secrets Manager
+worker  → Shopify GraphQL (allowlisted mutator only)
+```
+
+Terraform-only IaC under `infra/terraform/`. Images are multi-stage, non-root, SHA-tagged. Migrations run as a one-off ECS task (`python -m merchantos_db.migrate`), not on API startup. Staging/production queues use `AwsSqsQueue` (task role; never create queues). Frontend never receives server secrets.
+
+Shopify OAuth against AWS is valid only after an HTTPS origin exists. Destroy staging with `scripts/teardown-staging.sh` when idle.
+

@@ -13,8 +13,10 @@ from merchantos_db import CommerceRepository, session_scope
 from merchantos_db.models import OutboxMessage, WebhookEvent
 from merchantos_domain import TenantContext
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import FakeShopifyMutator
 from merchantos_shopify.testing import FakeShopifyReader
 from merchantos_worker.capabilities import (
+    ExecutionCapabilities,
     SyncCapabilities,
     WebhookCapabilities,
     WorkerRuntime,
@@ -106,6 +108,7 @@ def test_commerce_webhook_acks_without_writing_catalog(postgres: None) -> None:
         sync=SyncCapabilities(reader=reader),
         webhook=WebhookCapabilities(reader=reader),
         agent=fake_agent_capabilities(),
+        execution=ExecutionCapabilities(mutator=FakeShopifyMutator()),
         encryptor=encryptor,
         owner="wh-api",
     )

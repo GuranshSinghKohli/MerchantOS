@@ -9,11 +9,13 @@ from merchantos_observability import configure_logging, get_logger
 from merchantos_queue import create_queue
 from merchantos_shopify.adapter import ShopifyAdapter
 from merchantos_shopify.encryption import TokenEncryptor
+from merchantos_shopify.mutator import AdapterShopifyMutator
 from redis import Redis
 
 from merchantos_worker import __version__
 from merchantos_worker.capabilities import (
     AgentCapabilities,
+    ExecutionCapabilities,
     SyncCapabilities,
     WebhookCapabilities,
     WorkerRuntime,
@@ -35,6 +37,7 @@ def build_runtime(settings: WorkerSettings) -> WorkerRuntime:
         access_key_id=settings.aws_access_key_id,
         secret_access_key=settings.aws_secret_access_key,
         environment=settings.app_env,
+        queue_url=settings.sqs_queue_url,
     )
     queue.ping()
     reader = ShopifyAdapter(
@@ -60,6 +63,7 @@ def build_runtime(settings: WorkerSettings) -> WorkerRuntime:
             tools=build_commerce_registry(AnalyticsService(engine)),
             llm=llm,
         ),
+        execution=ExecutionCapabilities(mutator=AdapterShopifyMutator(reader)),
         encryptor=encryptor,
         owner=f"worker-{uuid4()}",
     )

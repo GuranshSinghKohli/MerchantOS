@@ -1,0 +1,64 @@
+# Production image smoke against local Compose dependencies.
+# Usage: docker compose -f infra/docker/compose.yml -f infra/docker/compose.images.yml up --build
+name: merchantos-images
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgresql://merchantos:merchantos@postgres:5432/merchantos
+      REDIS_URL: redis://redis:6379/0
+      SQS_ENDPOINT_URL: http://elasticmq:9324
+      SQS_QUEUE_NAME: merchantos-dev-jobs
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      LLM_PROVIDER: fake
+      WEB_ORIGIN: http://localhost:3000
+      TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgresql://merchantos:merchantos@postgres:5432/merchantos
+      REDIS_URL: redis://redis:6379/0
+      SQS_ENDPOINT_URL: http://elasticmq:9324
+      SQS_QUEUE_NAME: merchantos-dev-jobs
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      LLM_PROVIDER: fake
+      WORKER_ONCE: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticmq:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        API_UPSTREAM: http://api:8000
+    environment:
+      API_UPSTREAM: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

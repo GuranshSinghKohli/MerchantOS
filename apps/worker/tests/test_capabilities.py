@@ -1,6 +1,11 @@
 from inspect import signature
 
-from merchantos_worker.capabilities import AgentCapabilities, SyncCapabilities, WebhookCapabilities
+from merchantos_worker.capabilities import (
+    AgentCapabilities,
+    ExecutionCapabilities,
+    SyncCapabilities,
+    WebhookCapabilities,
+)
 from merchantos_worker.handlers.agent import handle_agent_run
 
 
@@ -21,3 +26,9 @@ def test_agent_capabilities_have_no_mutator() -> None:
     params = signature(handle_agent_run).parameters
     assert "caps" in params
     assert "AgentCapabilities" in str(params["caps"].annotation)
+
+
+def test_execution_capabilities_have_no_llm() -> None:
+    assert list(ExecutionCapabilities.__dataclass_fields__) == ["mutator"]
+    assert "llm" not in ExecutionCapabilities.__dataclass_fields__
+    assert "tools" not in ExecutionCapabilities.__dataclass_fields__

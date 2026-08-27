@@ -82,3 +82,21 @@ jobs:
         run: pnpm web:typecheck
       - name: Test
         run: pnpm web:test
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: Format
+        run: terraform fmt -check -recursive infra/terraform
+      - name: Validate
+        run: |
+          terraform -chdir=infra/terraform/bootstrap init -backend=false -input=false
+          terraform -chdir=infra/terraform/bootstrap validate
+          for env in staging production; do
+            terraform -chdir="infra/terraform/envs/$env" init -backend=false -input=false
+            terraform -chdir="infra/terraform/envs/$env" validate
+          done

@@ -21,7 +21,7 @@ Future Agent
 
 The MCP layer is an interface. It does not recompute analytics or issue SQL.
 
-`execute_approved_action` **does not exist**. Execution remains `ExecutionWorker` → `ApprovedAction.load` → `ShopifyMutator` (later phase).
+`execute_approved_action` **does not exist**. Execution is `ExecutionWorker` → `ApprovedAction.load` → typed `ShopifyMutator` methods only ([ADR 0023](adr/0023-phase9-human-approved-mutations.md)).
 
 ## Allowlists
 
@@ -36,7 +36,7 @@ Phase 5 agent allowlists (read tools only):
 | inventory | `get_inventory_health`, `get_product_performance` |
 | customer | `get_customer_metrics` |
 
-Phase 7 binds analytics, inventory, and customer. `strategy` and `action_planner` are not bound until propose tools exist.
+Phase 7 binds analytics, inventory, and customer. Phase 8 reuses those allowlists through the intelligence graph. `strategy` and `action_planner` are not bound until propose tools exist.
 
 ## Common rules
 

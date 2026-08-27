@@ -30,6 +30,8 @@ Authenticated merchant session
 
 There is no `execute_approved_action` MCP tool. There is no `ApprovedAction` constructor callable from agent code.
 
+Phase 8 stops at advisory `Recommendation` on `IntelligenceReport`. The intelligence graph cannot persist `ApprovalRecord`, construct `ApprovedAction`, or call Shopify.
+
 ## 2. TenantContext
 
 ```python
@@ -77,9 +79,14 @@ class QueueMessage(FrozenModel):
 ```python
 class ActionType(Enum):
     # Allowlist only. Adding a member requires a policy table row.
+    UPDATE_PRODUCT_TITLE = "update_product_title"
+    UPDATE_PRODUCT_DESCRIPTION = "update_product_description"
+    UPDATE_PRODUCT_TAGS = "update_product_tags"
+    UPDATE_PRODUCT_STATUS = "update_product_status"
     REDUCE_DISCOUNT_DEPTH = "reduce_discount_depth"
     UPDATE_VARIANT_PRICE = "update_variant_price"
     # no DELETE_*, no BULK_* in V1
+    # Phase 9 executes only the four product-metadata types.
 
 class AgentActionProposal(FrozenModel):
     """The only action-shaped object an agent may produce."""
@@ -161,6 +168,10 @@ Risk table (code, not prompt):
 
 | ActionType | Count 1 | Count > N (N=5 V1) |
 |------------|---------|---------------------|
+| UPDATE_PRODUCT_TITLE | MEDIUM | HIGH |
+| UPDATE_PRODUCT_DESCRIPTION | MEDIUM | HIGH |
+| UPDATE_PRODUCT_TAGS | MEDIUM | HIGH |
+| UPDATE_PRODUCT_STATUS | MEDIUM | HIGH |
 | UPDATE_VARIANT_PRICE | HIGH | CRITICAL (block) |
 | REDUCE_DISCOUNT_DEPTH | HIGH | CRITICAL (block) |
 | Internal insight only | n/a (not an ActionType) | |

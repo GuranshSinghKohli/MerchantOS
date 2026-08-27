@@ -12,6 +12,7 @@ class WorkerSettings(BaseSettings):
     sqs_endpoint_url: str | None = None
     sqs_region: str = "us-east-1"
     sqs_queue_name: str = "merchantos-dev-jobs"
+    sqs_queue_url: str | None = None
     aws_access_key_id: str = Field(default="local")
     aws_secret_access_key: str = Field(default="local")
     worker_once: bool = False

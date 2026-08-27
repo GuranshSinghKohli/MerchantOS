@@ -2,7 +2,7 @@
 
 AI-native commerce operating system for Shopify merchants.
 
-Phase 7 adds analytics, inventory, and customer specialists on the Phase 6 LangGraph runtime. They use Phase 5 read tools only. Shopify mutations and approvals are not included.
+Phase 9 adds merchant-approved, allowlisted Shopify product mutations. The model may propose; only an authenticated merchant can approve; a deterministic worker executes.
 
 Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md). Architecture: [`docs/architecture.md`](docs/architecture.md).
 
@@ -59,19 +59,20 @@ make test
 
 ```
 apps/api          FastAPI
-apps/worker       Sync + webhook workers (ShopifyReader only)
-apps/web          Next.js dashboard (overview, analytics, products, inventory, customers, insights)
+apps/worker       Sync + webhook + agent + execution workers
+apps/web          Next.js dashboard
 packages/domain   TenantContext, QueueMessage, proposal types
-packages/app      AnalyticsService and later policy/approval services
+packages/app      Analytics, policy, approval services
 packages/mcp      In-process read-tool registry (no execute tools)
 packages/llm      LLMPort, FakeLLM, OpenAI adapter
 packages/agents   LangGraph orchestrator (no ApprovedAction / mutator)
 apps/agentbench   Deterministic runtime evaluation harness
-packages/observability  JSON logs + redaction
-packages/db       SQLAlchemy + Alembic (identity + commerce + jobs)
-packages/shopify  OAuth, HMAC, GraphQL Admin 2026-07 reader, token encryption
-packages/queue    QueuePort, InMemoryQueue, ElasticMqDevQueue (dev only)
-infra/docker      Compose dependencies
+packages/observability  JSON logs, redaction, CloudWatch EMF
+packages/db       SQLAlchemy + Alembic + migrate CLI
+packages/shopify  OAuth, HMAC, GraphQL Admin 2026-07, typed mutator
+packages/queue    QueuePort, InMemory, ElasticMQ (dev), AwsSqsQueue (AWS)
+infra/docker      Compose dependencies + production image smoke
+infra/terraform   Staging/production AWS (ECR, ECS, RDS, Redis, SQS)
 ```
 
 ## Shopify install (Phase 2)
@@ -87,6 +88,17 @@ The browser never receives the offline access token. `GET /api/v1/me` returns sh
 
 Metric definitions: [`docs/metrics.md`](docs/metrics.md). Dashboard visual system: [`docs/DESIGN.md`](docs/DESIGN.md).
 
+## AWS (Phase 10)
+
+Terraform lives in `infra/terraform/`. See [`docs/deployment.md`](docs/deployment.md) and [ADR 0024](docs/adr/0024-cost-optimized-aws-network.md).
+
+Live apply needs an AWS account, a unique state bucket, and (for Shopify OAuth) an HTTPS domain. This repository does not contain AWS credentials.
+
+```
+make image-build
+make tf-validate
+```
+
 ## What is not here yet
 
-Specialist agents, propose/mutation tools, approval workflows, Terraform/AWS, and the rest of the merchant OS loop. Those are later phases. MCP HTTP and Sidekick are not in V1.
+MCP HTTP, Sidekick, token refresh, and later product phases. Do not start Phase 11 from the README.

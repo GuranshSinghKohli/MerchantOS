@@ -70,3 +70,19 @@ class AgentCancelledError(DomainError):
 
 class NotFoundError(DomainError):
     http_status = 404
+
+
+class NotApprovedError(DomainError):
+    http_status = 409
+
+
+class ActionExpiredError(DomainError):
+    http_status = 409
+
+
+class ActionConflictError(DomainError):
+    http_status = 409
+
+
+class InvalidActionError(DomainError):
+    http_status = 422

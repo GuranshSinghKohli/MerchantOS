@@ -32,13 +32,13 @@ def enqueue_ask(request: Request, body: AskBody) -> dict[str, object]:
 @router.get("/ask/{run_id}")
 def get_ask(request: Request, run_id: UUID) -> dict[str, object]:
     ctx = tenant_from_request(db_engine(), request)
-    return _service().get(ctx, run_id)
+    return _service().get(ctx, run_id, run_kind="ask")
 
 
 @router.get("/ask")
 def list_asks(request: Request) -> dict[str, object]:
     ctx = tenant_from_request(db_engine(), request)
-    return {"runs": _service().list_runs(ctx)}
+    return {"runs": _service().list_runs(ctx, run_kind="ask")}
 
 
 @router.post("/ask/{run_id}/cancel")

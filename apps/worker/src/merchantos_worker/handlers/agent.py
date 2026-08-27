@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from merchantos_agents import run_orchestrator, to_ask_result
+from merchantos_agents import run_intelligence, run_orchestrator, to_ask_result
 from merchantos_db import AgentRunRepository, session_scope
 from merchantos_domain import (
     MAX_AGENT_ATTEMPTS,
@@ -14,6 +14,7 @@ from merchantos_domain import (
     InvalidModelOutputError,
     LLMTimeoutError,
     ProviderFailureError,
+    RunKind,
     TenantContext,
     TransientJobError,
 )
@@ -26,6 +27,7 @@ from merchantos_worker.capabilities import AgentCapabilities
 
 logger = get_logger(__name__)
 _LEASE = timedelta(seconds=45)
+_INTEL_LEASE = timedelta(seconds=90)
 
 
 def handle_agent_run(
@@ -44,7 +46,9 @@ def handle_agent_run(
         if existing.status in {status.value for status in TERMINAL_STATUSES}:
             return
         identity = repo.identity(job_id)
-        row = repo.acquire_lease(job_id, owner=owner, now=now, ttl=_LEASE)
+        kind = getattr(existing, "run_kind", RunKind.ASK.value)
+        lease = _INTEL_LEASE if kind == RunKind.INTELLIGENCE.value else _LEASE
+        row = repo.acquire_lease(job_id, owner=owner, now=now, ttl=lease)
         if row is None or identity is None:
             return
         attempt = row.attempt
@@ -58,28 +62,55 @@ def handle_agent_run(
         recorded.append((name, arguments, result, latency_ms))
 
     try:
-        state = run_orchestrator(
-            llm=caps.llm,
-            tools=caps.tools,
-            tenant=ctx,
-            run_id=run_id,
-            request_id=ctx.request_id,
-            question=question,
-            recorder=recorder,
-        )
-        result = to_ask_result(state)
+        classification: str | None
+        plan: str | None
+        model: str | None
+        if kind == RunKind.INTELLIGENCE.value:
+            report, token_in, token_out, model = run_intelligence(
+                llm=caps.llm,
+                tools=caps.tools,
+                tenant=ctx,
+                run_id=run_id,
+                request_id=ctx.request_id,
+                question=question,
+                recorder=recorder,
+            )
+            result_json = report.model_dump_json()
+            classification = "intelligence"
+            plan = ",".join(report.selected_agents)
+            token_input = token_in
+            token_output = token_out
+            agent_name = "intelligence"
+        else:
+            state = run_orchestrator(
+                llm=caps.llm,
+                tools=caps.tools,
+                tenant=ctx,
+                run_id=run_id,
+                request_id=ctx.request_id,
+                question=question,
+                recorder=recorder,
+            )
+            result = to_ask_result(state)
+            result_json = result.model_dump_json()
+            classification = state.classification
+            plan = state.plan
+            token_input = state.token_input
+            token_output = state.token_output
+            model = state.model
+            agent_name = state.agent_name or "orchestrator"
         latency_ms = int((time.perf_counter() - started) * 1000)
         with session_scope(engine) as db:
             runs = AgentRunRepository(db)
             runs.complete(
                 run_id,
                 now=datetime.now(UTC),
-                classification=state.classification,
-                plan=state.plan,
-                result_json=result.model_dump_json(),
-                token_input=state.token_input,
-                token_output=state.token_output,
-                model=state.model,
+                classification=classification,
+                plan=plan,
+                result_json=result_json,
+                token_input=token_input,
+                token_output=token_output,
+                model=model,
                 latency_ms=latency_ms,
                 estimated_cost_usd="0",
             )
@@ -90,13 +121,13 @@ def handle_agent_run(
             request_id=str(ctx.request_id),
             merchant_id=str(ctx.merchant_id),
             store_id=str(ctx.store_id),
-            agent_name=state.agent_name or "orchestrator",
+            agent_name=agent_name,
             duration_ms=latency_ms,
             success=True,
             retry_count=attempt,
-            model=state.model,
-            token_input=state.token_input,
-            token_output=state.token_output,
+            model=model,
+            token_input=token_input,
+            token_output=token_output,
         )
     except (LLMTimeoutError, ProviderFailureError, ToolError) as exc:
         _fail_or_retry(

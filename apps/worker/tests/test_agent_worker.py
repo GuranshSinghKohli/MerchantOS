@@ -2,10 +2,11 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from merchantos_agents.selection import select_agents
 from merchantos_app import AnalyticsService, AskService
 from merchantos_db import AgentRunRepository, session_scope
 from merchantos_domain import AgentRunStatus, ProviderFailureError, TenantContext, TransientJobError
-from merchantos_llm import FakeLLM, FakeTurn
+from merchantos_llm import FakeLLM, FakeTurn, default_intelligence_turns
 from merchantos_mcp import build_commerce_registry
 from merchantos_shopify.encryption import TokenEncryptor
 from merchantos_worker.capabilities import AgentCapabilities
@@ -187,3 +188,36 @@ def test_specialist_run_persists_agent_and_tools(postgres: Engine) -> None:
         calls = AgentRunRepository(session).list_tool_calls(ctx, rid)
         assert [item.tool_name for item in calls] == ["get_revenue_metrics"]
         assert all("@" not in (item.output_redacted or "") for item in calls)
+
+
+def test_intelligence_run_persists_report_and_tools(postgres: Engine) -> None:
+    encryptor = TokenEncryptor.from_urlsafe_key(TEST_KEY, "test")
+    with session_scope(postgres) as session:
+        view = seed_installed_store(session, shop="agent-intel.myshopify.com", encryptor=encryptor)
+        ctx = _ctx(view)
+    question = "Why is my revenue down?"
+    created = AskService(postgres).enqueue(ctx, question, run_kind="intelligence")
+    rid = UUID(str(created["run_id"]))
+    caps = AgentCapabilities(
+        tools=build_commerce_registry(AnalyticsService(postgres)),
+        llm=FakeLLM(default_intelligence_turns(select_agents(question))),
+    )
+    handle_agent_run(engine=postgres, caps=caps, job_id=rid, owner="w-intel")
+    with session_scope(postgres) as session:
+        row = AgentRunRepository(session).get(rid)
+        assert row is not None
+        assert row.status == AgentRunStatus.COMPLETED.value
+        assert row.run_kind == "intelligence"
+        assert row.classification == "intelligence"
+        assert row.plan == "analytics,inventory"
+        assert row.result_json is not None
+        assert "recommendations" in row.result_json
+        assert "executive_summary" in row.result_json
+        assert "approved_action" not in row.result_json
+        assert "shpua_" not in row.result_json
+        assert row.latency_ms is not None
+        calls = AgentRunRepository(session).list_tool_calls(ctx, rid)
+        assert {item.tool_name for item in calls} == {
+            "get_revenue_metrics",
+            "get_inventory_health",
+        }

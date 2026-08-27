@@ -203,18 +203,6 @@ export function InsightsView() {
   );
 }
 
-export function ActionsPlaceholder() {
-  return (
-    <div className="grid gap-4">
-      <h1 className="text-xl font-semibold">Actions</h1>
-      <EmptyBoard
-        title="Approval-gated actions are not in Phase 4"
-        body="This page is navigation only. Shopify mutations stay out of this release."
-      />
-    </div>
-  );
-}
-
 export function SettingsView() {
   const session = useSessionStore();
   const request = useQuery({

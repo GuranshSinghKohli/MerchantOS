@@ -13,5 +13,5 @@ def test_authorization_url_is_offline_grant() -> None:
     assert "state=nonce-1" in url
     assert "grant_options" not in url
     assert "read_products" in url
-    assert "write_products" not in url
+    assert "write_products" in url
     assert "write_discounts" not in url

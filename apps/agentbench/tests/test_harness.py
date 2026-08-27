@@ -23,4 +23,13 @@ def test_phase7_suite_passes() -> None:
         "inventory-injection",
         "customer-tenant-switch",
         "customer-unsupported-ltv",
+        "intel-revenue-decline",
+        "intel-inventory-concern",
+        "intel-customer-change",
+        "intel-broad-health",
+        "intel-conflicting-evidence",
+        "intel-insufficient",
+        "intel-prompt-injection",
+        "intel-cross-tenant",
+        "intel-unsupported-causal",
     }

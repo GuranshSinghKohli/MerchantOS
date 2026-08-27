@@ -33,4 +33,5 @@ def queue() -> QueuePort:
         access_key_id=cfg.aws_access_key_id,
         secret_access_key=cfg.aws_secret_access_key,
         environment=cfg.app_env,
+        queue_url=cfg.sqs_queue_url,
     )

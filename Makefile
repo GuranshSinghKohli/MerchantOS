@@ -1,4 +1,4 @@
-.PHONY: deps up down test lint fmt typecheck api worker web migrate
+.PHONY: deps up down test lint fmt typecheck api worker web migrate image-build tf-validate
 
 deps:
 	uv sync --all-packages --group dev
@@ -37,3 +37,17 @@ worker:
 
 web:
 	pnpm web
+
+image-build:
+	docker build -f apps/api/Dockerfile -t merchantos-api:local .
+	docker build -f apps/worker/Dockerfile -t merchantos-worker:local .
+	docker build -f apps/web/Dockerfile -t merchantos-web:local .
+
+tf-validate:
+	terraform fmt -check -recursive infra/terraform
+	terraform -chdir=infra/terraform/bootstrap init -backend=false -input=false
+	terraform -chdir=infra/terraform/bootstrap validate
+	terraform -chdir=infra/terraform/envs/staging init -backend=false -input=false
+	terraform -chdir=infra/terraform/envs/staging validate
+	terraform -chdir=infra/terraform/envs/production init -backend=false -input=false
+	terraform -chdir=infra/terraform/envs/production validate

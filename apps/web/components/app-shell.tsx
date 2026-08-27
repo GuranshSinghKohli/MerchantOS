@@ -9,6 +9,7 @@ import {
   Menu,
   Moon,
   Package,
+  ClipboardCheck,
   Settings,
   Sun,
   Users,
@@ -28,6 +29,7 @@ const NAV = [
   { href: "/inventory", label: "Inventory", icon: Boxes },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/insights", label: "Insights", icon: Lightbulb },
+  { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
   { href: "/actions", label: "Actions", icon: Workflow },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
