@@ -1,3 +1,3 @@
-from merchantos_agentbench.runner import ScenarioResult, run_scenario
+from merchantos_agentbench.runner import ScenarioResult, run_scenario, run_suite
 
-__all__ = ["ScenarioResult", "run_scenario"]
+__all__ = ["ScenarioResult", "run_scenario", "run_suite"]

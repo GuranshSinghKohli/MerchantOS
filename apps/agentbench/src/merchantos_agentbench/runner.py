@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import asdict, dataclass
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -12,9 +13,9 @@ from merchantos_agents import (
     to_agent_result,
     to_ask_result,
 )
-from merchantos_domain import TenantContext
+from merchantos_domain import LLMTimeoutError, ProviderFailureError, TenantContext
 from merchantos_llm import FakeLLM, FakeTurn
-from merchantos_mcp import build_commerce_registry
+from merchantos_mcp import ToolError, build_commerce_registry
 
 from merchantos_agentbench.scenarios import RUNTIME_OVERVIEW, SCENARIOS
 
@@ -22,10 +23,21 @@ from merchantos_agentbench.scenarios import RUNTIME_OVERVIEW, SCENARIOS
 @dataclass(frozen=True)
 class ScenarioResult:
     scenario_id: str
+    suite: str
     passed: bool
     failures: tuple[str, ...]
     tool_names: tuple[str, ...]
     answer: str
+    latency_ms: int
+    llm_calls: int
+    tool_calls: int
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: str
+    scored: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 def _ctx() -> TenantContext:
@@ -173,75 +185,143 @@ def _service(spec: dict[str, Any]) -> _EvalAnalytics:
     )
 
 
+def _fake_turns(spec: dict[str, Any]) -> list[FakeTurn]:
+    turns: list[FakeTurn] = []
+    for raw in spec["turns"]:
+        if not isinstance(raw, dict):
+            raise TypeError("scenario turns must be objects")
+        kind = raw.get("_error")
+        if kind == "timeout":
+            turns.append(FakeTurn({}, delay_seconds=9))
+        elif kind == "provider":
+            turns.append(FakeTurn(error=ProviderFailureError("provider down")))
+        else:
+            turns.append(FakeTurn({key: value for key, value in raw.items() if key != "_error"}))
+    return turns
+
+
+def _score_flags(spec: dict[str, Any]) -> tuple[str, ...]:
+    flags: list[str] = ["structured_output"]
+    if spec.get("expect_agents"):
+        flags.append("agent_selection")
+    if spec.get("expect_tools"):
+        flags.append("tool_selection")
+        flags.append("tool_arguments")
+    if spec.get("expect_grounded"):
+        flags.append("grounding")
+    if spec.get("forbid_claims") or spec.get("expect_no_unsupported_cause"):
+        flags.append("unsupported_claims")
+    if spec.get("expect_contradictions"):
+        flags.append("contradiction")
+    if spec.get("expect_trusted_store"):
+        flags.append("tenant_isolation")
+    if spec.get("forbid_approval") or spec.get("forbid_execute_recommendation"):
+        flags.append("mutation_safety")
+        flags.append("recommendation_safety")
+        flags.append("action_policy")
+    if spec.get("expect_tool_error") or spec.get("forbid_tools"):
+        flags.append("mutation_safety")
+        flags.append("action_policy")
+    return tuple(dict.fromkeys(flags))
+
+
 def run_scenario(spec: dict[str, Any] | None = None) -> ScenarioResult:
     spec = spec or RUNTIME_OVERVIEW
-    llm = FakeLLM([FakeTurn(turn) for turn in spec["turns"]])
+    llm = FakeLLM(_fake_turns(spec))
     ctx = _ctx()
     tools = build_commerce_registry(_service(spec))  # type: ignore[arg-type]
     recorded: list[str] = []
     recorded_stores: list[str] = []
-
-    def recorder(name: str, arguments: dict[str, Any], result: Any, latency_ms: int) -> None:
-        recorded.append(name)
-        output = getattr(result, "output", None) or {}
-        if isinstance(output, dict):
-            store = output.get("store")
-            if isinstance(store, dict) and store.get("store_id"):
-                recorded_stores.append(str(store["store_id"]))
-
+    failures: list[str] = []
     report = None
     state = None
-    if spec.get("kind") == "specialist":
-        state = run_agent(
-            name=str(spec["agent"]),
-            llm=llm,
-            tools=tools,
-            tenant=ctx,
-            run_id=uuid4(),
-            request_id=ctx.request_id,
-            question=str(spec["question"]),
-        )
-        result = to_agent_result(state)
-        answer = result.summary
-        grounded = all(
-            set(finding.evidence_ids) <= {item.id for item in result.evidence}
-            for finding in result.findings
-        )
-        tool_names = tuple(item.name for item in state.tool_results)
-        blob = f"{answer} {state.limitations} {state.findings}".lower()
-    elif spec.get("kind") == "intelligence":
-        report, _, _, _ = run_intelligence(
-            llm=llm,
-            tools=tools,
-            tenant=ctx,
-            run_id=uuid4(),
-            request_id=ctx.request_id,
-            question=str(spec["question"]),
-            recorder=recorder,
-        )
-        answer = report.executive_summary
-        known = {item.id for item in report.evidence}
-        grounded = all(set(item.evidence_ids) <= known for item in report.insights)
-        grounded = grounded and all(
-            set(item.evidence_ids) <= known for item in report.recommendations
-        )
-        tool_names = tuple(recorded)
-        blob = report.model_dump_json().lower()
-    else:
-        state = run_orchestrator(
-            llm=llm,
-            tools=tools,
-            tenant=ctx,
-            run_id=uuid4(),
-            request_id=ctx.request_id,
-            question=str(spec["question"]),
-        )
-        ask = to_ask_result(state)
-        answer = ask.answer
-        grounded = True
-        tool_names = tuple(item.name for item in state.tool_results)
-        blob = f"{answer} {state.limitations} {state.findings}".lower()
-    failures: list[str] = []
+    answer = ""
+    grounded = True
+    tool_names: tuple[str, ...] = ()
+    blob = ""
+    input_tokens = 0
+    output_tokens = 0
+    expected_error = spec.get("expect_llm_error")
+    started = time.perf_counter()
+    try:
+
+        def recorder(name: str, arguments: dict[str, Any], result: Any, latency_ms: int) -> None:
+            recorded.append(name)
+            output = getattr(result, "output", None) or {}
+            if isinstance(output, dict):
+                store = output.get("store")
+                if isinstance(store, dict) and store.get("store_id"):
+                    recorded_stores.append(str(store["store_id"]))
+
+        if spec.get("kind") == "specialist":
+            state = run_agent(
+                name=str(spec["agent"]),
+                llm=llm,
+                tools=tools,
+                tenant=ctx,
+                run_id=uuid4(),
+                request_id=ctx.request_id,
+                question=str(spec["question"]),
+            )
+            result = to_agent_result(state)
+            answer = result.summary
+            grounded = all(
+                set(finding.evidence_ids) <= {item.id for item in result.evidence}
+                for finding in result.findings
+            )
+            tool_names = tuple(item.name for item in state.tool_results)
+            blob = f"{answer} {state.limitations} {state.findings}".lower()
+            input_tokens = state.token_input
+            output_tokens = state.token_output
+        elif spec.get("kind") == "intelligence":
+            report, input_tokens, output_tokens, _model = run_intelligence(
+                llm=llm,
+                tools=tools,
+                tenant=ctx,
+                run_id=uuid4(),
+                request_id=ctx.request_id,
+                question=str(spec["question"]),
+                recorder=recorder,
+            )
+            answer = report.executive_summary
+            known = {item.id for item in report.evidence}
+            grounded = all(set(item.evidence_ids) <= known for item in report.insights)
+            grounded = grounded and all(
+                set(item.evidence_ids) <= known for item in report.recommendations
+            )
+            tool_names = tuple(recorded)
+            blob = report.model_dump_json().lower()
+        else:
+            state = run_orchestrator(
+                llm=llm,
+                tools=tools,
+                tenant=ctx,
+                run_id=uuid4(),
+                request_id=ctx.request_id,
+                question=str(spec["question"]),
+            )
+            ask = to_ask_result(state)
+            answer = ask.answer
+            grounded = True
+            tool_names = tuple(item.name for item in state.tool_results)
+            blob = f"{answer} {state.limitations} {state.findings}".lower()
+            input_tokens = state.token_input
+            output_tokens = state.token_output
+        if spec.get("expect_tool_error"):
+            failures.append("expected tool error")
+        if expected_error is not None:
+            failures.append("expected llm error")
+    except ToolError:
+        if spec.get("expect_tool_error"):
+            answer = "tool rejected"
+        else:
+            failures.append("unexpected tool error")
+    except (LLMTimeoutError, ProviderFailureError) as exc:
+        if expected_error is not None and isinstance(exc, expected_error):
+            answer = "llm failed safely"
+        else:
+            failures.append(f"unexpected llm error {type(exc).__name__}")
+    latency_ms = int((time.perf_counter() - started) * 1000)
     expected = tuple(spec.get("expect_tools", ()))
     if expected and tool_names != expected:
         failures.append(f"tools {tool_names} != {expected}")
@@ -298,14 +378,22 @@ def run_scenario(spec: dict[str, Any] | None = None) -> ScenarioResult:
             failures.append(f"unsupported claim {claim}")
     if spec.get("forbid_pii") and ("@" in blob or "jane@" in blob):
         failures.append("pii leaked")
-    if not answer:
+    if not answer and not spec.get("expect_tool_error") and expected_error is None:
         failures.append("empty answer")
     return ScenarioResult(
         scenario_id=str(spec["id"]),
+        suite=str(spec.get("suite") or spec.get("kind") or "core"),
         passed=not failures,
         failures=tuple(failures),
         tool_names=tool_names,
         answer=answer,
+        latency_ms=latency_ms,
+        llm_calls=len(llm.calls),
+        tool_calls=len(tool_names),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        estimated_cost_usd="0",
+        scored=_score_flags(spec),
     )
 
 
@@ -314,15 +402,22 @@ def run_suite() -> list[ScenarioResult]:
 
 
 def main() -> int:
+    from merchantos_agentbench.report import write_report
+
     results = run_suite()
+    path = write_report(results)
     failed = 0
     for result in results:
         status = "PASS" if result.passed else "FAIL"
-        print(f"{result.scenario_id}: {status} tools={result.tool_names}")
+        print(
+            f"{result.scenario_id}: {status} suite={result.suite} "
+            f"tools={result.tool_names} llm={result.llm_calls} {result.latency_ms}ms"
+        )
         for item in result.failures:
             print(f"  - {item}")
         if not result.passed:
             failed += 1
+    print(f"wrote {path}")
     return 0 if failed == 0 else 1
 
 

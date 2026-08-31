@@ -2,7 +2,7 @@
 
 **Status:** Accepted for V1 planning  
 **Sources:** [SYSTEM_DESIGN.md](../SYSTEM_DESIGN.md), PRD v1.0, [contracts.md](contracts.md)  
-**Last updated:** 2026-08-26 (Phase 9 human-approved product mutations)
+**Last updated:** 2026-08-31 (Phase 12 portfolio release)
 
 MerchantOS is an AI-native commerce operating system for Shopify merchants. It is a real Shopify application, not a chatbot, analytics clone, or Shopify Admin replacement.
 
@@ -90,7 +90,7 @@ MerchantOS/
     api/                 # FastAPI: HTTP, auth, webhooks, read APIs, enqueue
     worker/              # SQS consumers: sync, agent runs, action execution
     web/                 # Next.js merchant UI (starts when Overview exists)
-    agentbench/          # Evaluation CLI (Phase 13)
+    agentbench/          # Evaluation CLI (Phase 11)
   packages/
     domain/              # IDs, TenantContext, proposals, state machines
     app/                 # Application services (policy, approval, snapshot, metrics)
@@ -541,7 +541,7 @@ Executable types: `update_product_title`, `update_product_description`, `update_
 
 The LLM may propose field values only as untrusted merchant/API input. It cannot approve, construct `ApprovedAction`, change risk, pick a tenant, or call Shopify.
 
-Do not start Phase 11 from this document.
+Phase 11 is closed in §26. Phase 12 is closed in §27.
 
 ## 25. Phase 10
 
@@ -557,4 +557,25 @@ worker (Fargate Spot, no inbound)
 No ALB, no NAT, no ElastiCache, no Cloudflare. Estimate **$33–40/month** for one environment. The task IP changes on every replace; update the A record ([staging-https.md](staging-https.md)). Shopify OAuth is valid only after HTTPS on that hostname. Destroy staging with `scripts/teardown-staging.sh` when idle.
 
 An ALB in front of Caddy is a later production option and needs a new ADR plus a cost update.
+
+## 26. Phase 11
+
+**Status:** Closed 2026-08-31 ([ADR 0026](adr/0026-phase11-eval-and-hardening.md), [evaluation.md](evaluation.md), [security.md](security.md)).
+
+Validation and hardening only. AgentBench expands the FakeLLM corpus (injection, tool abuse, tenant switch, reliability) and writes `artifacts/eval/*.json`. Orchestrator LLM context redacts emails. Lease recovery, AWS IAM/network contracts, and graph-bound tests are mandatory. Production AWS apply remains operator-gated.
+
+Phase 12 is closed in §27. Do not invent a Phase 13 from this document.
+
+## 27. Phase 12
+
+**Status:** Closed 2026-08-31 ([ADR 0027](adr/0027-phase12-productization.md), [demo.md](demo.md), [FINAL_RELEASE.md](FINAL_RELEASE.md)).
+
+Productization only. Ask MerchantOS, empty-store import, and merchant-safe approval copy sit on the Phase 1–11 APIs. No new architecture, no production apply, no execute tool.
+
+```
+Merchant → Next.js → FastAPI → LangGraph → MCP read tools → services → PostgreSQL
+Recommendation → ActionProposal → merchant approval → ApprovedAction → SQS → worker → Shopify → verify
+Internet → HTTPS (Caddy) → ECS edge → RDS / SQS / Secrets Manager
+```
+
 

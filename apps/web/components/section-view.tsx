@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { DateRangeBar } from "@/components/date-range-bar";
+import { ConnectStoreBoard, EmptyStoreBoard } from "@/components/empty-store";
 import { OverviewView } from "@/components/overview-view";
 import { EmptyBoard, ErrorBoard, LoadingBoard } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,8 +18,10 @@ import {
   fetchJson,
   fetchOverview,
   formatMoney,
+  isAuthError,
   isQueryReady,
 } from "@/lib/analytics";
+import { neverSynced, syncStatusLabel } from "@/lib/labels";
 import { useSessionStore } from "@/lib/use-session-store";
 
 function CustomRangePrompt({ title }: { title: string }) {
@@ -54,17 +57,29 @@ export function InventoryView() {
     enabled: Boolean(session.data?.store_id) && isQueryReady(query),
   });
   if (session.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (!isQueryReady(query)) return <CustomRangePrompt title="Inventory" />;
   if (request.isLoading) return <LoadingBoard />;
   if (request.isError) return <ErrorBoard message={(request.error as Error).message} />;
   const data = request.data;
+  if (data && neverSynced(data.store.sync_status)) {
+    return (
+      <div className="grid gap-4">
+        <h1 className="text-xl font-semibold">Inventory</h1>
+        <DateRangeBar />
+        <EmptyStoreBoard shopDomain={data.store.shop_domain} syncStatus={data.store.sync_status} />
+      </div>
+    );
+  }
   if (!data || data.inventory.tracked_variants === 0) {
     return (
       <div className="grid gap-4">
         <h1 className="text-xl font-semibold">Inventory</h1>
         <DateRangeBar />
-        <EmptyBoard title="No inventory snapshots" body="Run a sync so available and on-hand quantities can be projected." />
+        <EmptyBoard title="No inventory yet" body="Import store data from Settings so available units can appear here." />
       </div>
     );
   }
@@ -128,11 +143,23 @@ export function CustomersView() {
     enabled: Boolean(session.data?.store_id) && isQueryReady(query),
   });
   if (session.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (!isQueryReady(query)) return <CustomRangePrompt title="Customers" />;
   if (request.isLoading) return <LoadingBoard />;
   if (request.isError) return <ErrorBoard message={(request.error as Error).message} />;
   const data = request.data;
+  if (data && neverSynced(data.store.sync_status)) {
+    return (
+      <div className="grid gap-4">
+        <h1 className="text-xl font-semibold">Customers</h1>
+        <DateRangeBar />
+        <EmptyStoreBoard shopDomain={data.store.shop_domain} syncStatus={data.store.sync_status} />
+      </div>
+    );
+  }
   if (!data || data.kpis.customers === 0) {
     return (
       <div className="grid gap-4">
@@ -178,17 +205,35 @@ export function InsightsView() {
     enabled: Boolean(session.data?.store_id) && isQueryReady(query),
   });
   if (session.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (!isQueryReady(query)) return <CustomRangePrompt title="Insights" />;
   if (request.isLoading) return <LoadingBoard />;
   if (request.isError) return <ErrorBoard message={(request.error as Error).message} />;
+  if (request.data && neverSynced(request.data.store.sync_status)) {
+    return (
+      <div className="grid gap-4">
+        <h1 className="text-xl font-semibold">Insights</h1>
+        <DateRangeBar />
+        <EmptyStoreBoard
+          shopDomain={request.data.store.shop_domain}
+          syncStatus={request.data.store.sync_status}
+        />
+      </div>
+    );
+  }
   const rows = request.data?.opportunities ?? [];
   return (
     <div className="grid gap-4">
       <h1 className="text-xl font-semibold">Insights</h1>
       <DateRangeBar />
       {rows.length === 0 ? (
-        <EmptyBoard title="No opportunities" body="Deterministic rules found nothing to surface for this range." />
+        <EmptyBoard
+          title="No insights for this range"
+          body="When store data shows a clear opportunity, it appears here. You can also ask a question from Ask MerchantOS."
+        />
       ) : (
         rows.map((row) => (
           <Card key={row.key}>
@@ -211,21 +256,46 @@ export function SettingsView() {
       fetchJson<{ shop_domain: string; installed: boolean; scopes: string[] }>("/api/v1/settings"),
     enabled: Boolean(session.data?.store_id),
   });
+  const sync = useQuery({
+    queryKey: ["sync-status", session.data?.store_id],
+    queryFn: () => fetchJson<{ store_sync_status: string }>("/api/v1/store/sync"),
+    enabled: Boolean(session.data?.store_id),
+  });
   if (session.isLoading || request.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (request.isError) return <ErrorBoard message={(request.error as Error).message} />;
   const data = request.data;
   return (
     <div className="grid gap-4">
-      <h1 className="text-xl font-semibold">Settings</h1>
+      <div className="grid gap-1">
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">
+          Your Shopify connection. MerchantOS never shows access tokens here.
+        </p>
+      </div>
       <Card>
         <CardContent className="grid gap-2 pt-4 text-sm">
-          <p>Connection: Shopify</p>
-          <p>Shop: {data?.shop_domain}</p>
-          <p>Installed: {data?.installed ? "yes" : "no"}</p>
-          <p>Scopes: {data?.scopes.join(", ")}</p>
+          <p>Store: {data?.shop_domain}</p>
+          <p>Status: {data?.installed ? "Connected" : "Disconnected"}</p>
+          <p>
+            Import: {sync.data?.store_sync_status ? syncStatusLabel(sync.data.store_sync_status) : "—"}
+          </p>
+          <p>
+            {data?.scopes.includes("write_products")
+              ? "Approved product updates can be sent to Shopify."
+              : "This install can read the store. Product updates need write access."}
+          </p>
         </CardContent>
       </Card>
+      {data?.shop_domain && sync.data?.store_sync_status !== "completed" ? (
+        <EmptyStoreBoard
+          shopDomain={data.shop_domain}
+          syncStatus={sync.data?.store_sync_status ?? "not_started"}
+        />
+      ) : null}
     </div>
   );
 }

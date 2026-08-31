@@ -84,6 +84,8 @@ Phase 9: approval requires `TenantContext.from_session` and `session_bound=True`
 
 Phase 10: Terraform-only AWS. RDS is private. There is no ElastiCache. The `edge` task is in a public subnet without NAT ([ADR 0024](adr/0024-cost-optimized-aws-network.md), [ADR 0025](adr/0025-portfolio-cost-envelope.md)); inbound is 80/443 on Caddy only. The worker security group has no inbound rules. Images are non-root and contain no secrets. Secrets Manager JSON is injected by the ECS execution role; the API task role cannot read Secrets Manager or the DLQ. GitHub deploys via OIDC on `main` only. Shopify OAuth URLs are not switched to AWS until HTTPS is verified.
 
+Phase 11: adversarial AgentBench families (injection, tool abuse, tenant switch, mutation attempts) plus lease-recovery, IDOR, and AWS contract tests. Orchestrator LLM context redacts emails the same way intelligence already did. Graphs are DAGs (no re-entry). LLM timeout 8s, 2 schema retries, 5 specialist tools, 3 specialists, 3 job attempts. Production apply remains operator-gated.
+
 ## Prompt injection
 
 Product titles, descriptions, customer notes, order attributes, and the merchant question may contain instructions.
@@ -132,4 +134,24 @@ Structured JSON only. Never log access tokens, HMAC secrets, API keys, passwords
 
 ## Dependency and container scanning
 
-CI runs lint, typecheck, tests, and security scanning (e.g. pip-audit / npm audit, image scan on build). No laptop deploys to production.
+CI runs lint, typecheck, tests, and image scan on build (Trivy is report-only for official Caddy/Next base findings we do not patch in-image). No laptop deploys to production. Phase 11 reviews Python/npm lockfiles and Terraform IAM; do not blindly upgrade major versions.
+
+Workspace `pnpm.overrides` pins `postcss>=8.5.23`. Phase 11 `pnpm audit` (full tree) and `pip-audit` of api/worker runtime exports reported no known vulnerabilities. We do not jump to Next 16. Trivy remains report-only for official Caddy/Next **image** CVEs we do not patch in-tree.
+
+## Reliability model
+
+| Failure | Behavior |
+|---------|----------|
+| Postgres down | `/ready` fails; workers do not claim work |
+| Redis unset (staging/prod) | `/ready` skips Redis ([ADR 0025](adr/0025-portfolio-cost-envelope.md)) |
+| SQS down | enqueue fails closed; no silent drop |
+| Shopify 429 / 5xx | bounded retries + backoff; then `FAILED` / `TransientJobError` |
+| LLM timeout / provider | retry then fail the `AgentRun`; no approval/mutation |
+| MCP timeout | retryable tool error only |
+| Worker crash mid-lease | other owner cannot steal an unexpired lease; expired lease is reclaimable |
+| Duplicate SQS | idempotent complete; one Shopify mutation |
+| Malformed LLM output | schema retry then `InvalidModelOutputError` |
+
+## Threat-model additions (Phase 11)
+
+Merchant data, model output, and duplicated queue messages are hostile. The only mutation path is merchant session → `ApprovalService` → `ApprovedAction.load` → typed mutator. There is no execute MCP tool. Risk is assigned from `ACTION_RISK_TABLE` + count, not from recommendation text.

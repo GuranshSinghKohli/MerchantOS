@@ -42,3 +42,5 @@ Index:
 | [0023](0023-phase9-human-approved-mutations.md) | Phase 9 human-approved product mutations | Accepted |
 | [0024](0024-cost-optimized-aws-network.md) | Cost-optimized AWS network (no NAT Gateway) | Accepted (ALB/Redis superseded by 0025) |
 | [0025](0025-portfolio-cost-envelope.md) | Portfolio cost envelope (no ALB, no ElastiCache) | Accepted |
+| [0026](0026-phase11-eval-and-hardening.md) | Phase 11 evaluation, security tests, and cost bounds | Accepted |
+| [0027](0027-phase12-productization.md) | Phase 12 productization on existing APIs | Accepted |

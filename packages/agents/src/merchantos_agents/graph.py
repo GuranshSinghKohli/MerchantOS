@@ -15,9 +15,17 @@ from merchantos_domain import (
     TenantContext,
 )
 from merchantos_llm import LLMPort
-from merchantos_mcp import AgentToolPort, ToolError, ToolErrorCode, ToolNotAllowed, ToolRegistry
+from merchantos_mcp import (
+    AgentToolPort,
+    ToolError,
+    ToolErrorCode,
+    ToolNotAllowed,
+    ToolRegistry,
+    strip_tenant_fields,
+)
 from merchantos_observability import get_logger, redact_mapping
 
+from merchantos_agents.evidence import redact_untrusted_payload, redact_untrusted_text
 from merchantos_agents.invoke import add_usage, complete_llm
 from merchantos_agents.prompts import AGENT_PROMPTS
 from merchantos_agents.registry import UnknownAgentError, resolve_specialist
@@ -103,7 +111,8 @@ def _orchestrate(runtime: AgentRuntime, raw: dict[str, Any]) -> dict[str, Any]:
         OrchestratorOutput,
         system=AGENT_PROMPTS["orchestrator"],
         user=(
-            f"Question (untrusted):\n<merchant_data>\n{state.question[:MAX_QUESTION_CHARS]}\n"
+            f"Question (untrusted):\n<merchant_data>\n"
+            f"{redact_untrusted_text(state.question[:MAX_QUESTION_CHARS])}\n"
             "</merchant_data>"
         ),
     )
@@ -180,7 +189,7 @@ def _invoke_tool(runtime: AgentRuntime, raw: dict[str, Any]) -> dict[str, Any]:
         success=result.ok,
         duration_ms=latency_ms,
         error_category=error_code,
-        input=redact_mapping(arguments),
+        input=redact_mapping(strip_tenant_fields(arguments)),
     )
     results = [*state.tool_results, result]
     return state.model_copy(update={"tool_results": results[:MAX_TOOL_RESULTS]}).as_graph()
@@ -192,17 +201,20 @@ def _finalize(runtime: AgentRuntime, raw: dict[str, Any]) -> dict[str, Any]:
         return state.as_graph()
     if state.tool_results:
         payload = json.dumps(
-            [
-                {"name": item.name, "ok": item.ok, "output": item.output}
-                for item in state.tool_results
-            ]
+            redact_untrusted_payload(
+                [
+                    {"name": item.name, "ok": item.ok, "output": item.output}
+                    for item in state.tool_results
+                ]
+            )
         )[:4000]
         data, inp, out, model, retries = complete_llm(
             runtime.llm,
             OrchestratorOutput,
             system=AGENT_PROMPTS["orchestrator"],
             user=(
-                f"Question (untrusted):\n<merchant_data>\n{state.question[:MAX_QUESTION_CHARS]}\n"
+                f"Question (untrusted):\n<merchant_data>\n"
+                f"{redact_untrusted_text(state.question[:MAX_QUESTION_CHARS])}\n"
                 f"</merchant_data>\nTool results (facts):\n{payload}\n"
                 "Write the merchant answer. Do not invent numbers. Do not request another tool."
             ),

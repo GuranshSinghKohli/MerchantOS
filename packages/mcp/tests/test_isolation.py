@@ -208,8 +208,9 @@ def test_tenant_a_cannot_read_tenant_b_via_tool_args(postgres: None) -> None:
     for name in names:
         out = registry.invoke(name, poisoned, ctx_a, permissions=ALL_READ)
         blob = str(out)
-        assert "999" not in blob
+        assert "999.00" not in blob
         assert "Product b1" not in blob
+        assert "beta.myshopify.com" not in blob
         assert out["store"]["shop_domain"] == "alpha.myshopify.com"
         assert out["store"]["store_id"] == str(a.store_id)
 

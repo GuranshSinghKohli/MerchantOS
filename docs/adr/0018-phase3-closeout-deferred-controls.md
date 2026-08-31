@@ -4,6 +4,7 @@
 - **Date:** 2026-08-26
 - **Extends:** [0017](0017-oauth-and-mandatory-webhooks.md) (OAuth + mandatory webhooks), [0009](0009-server-injected-tenant-context.md) / [0014](0014-tenant-from-job-row.md) (tenant isolation)
 - **Does not supersede** 0014 or 0017
+- **Note (2026-08-31):** The ALB TLS sentence in §3 is superseded by [0025](0025-portfolio-cost-envelope.md). Staging HTTPS is Caddy on the edge task. Token refresh remains deferred.
 
 ## Context
 

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { DateRangeBar } from "@/components/date-range-bar";
+import { ConnectStoreBoard, EmptyStoreBoard } from "@/components/empty-store";
 import { EmptyBoard, ErrorBoard, LoadingBoard } from "@/components/states";
 import { TrendChart } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +16,10 @@ import {
   fetchOverview,
   formatMoney,
   formatPct,
+  isAuthError,
   isQueryReady,
 } from "@/lib/analytics";
+import { neverSynced, syncStatusLabel } from "@/lib/labels";
 import { useSessionStore } from "@/lib/use-session-store";
 
 function queryFromParams(params: URLSearchParams): AnalyticsQuery {
@@ -66,7 +69,10 @@ export function OverviewView() {
   });
 
   if (session.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (!isQueryReady(query)) {
     return (
       <div className="grid gap-4">
@@ -79,14 +85,22 @@ export function OverviewView() {
   if (request.isError) return <ErrorBoard message={(request.error as Error).message} />;
   const data = request.data;
   if (!data) return <LoadingBoard />;
+  if (neverSynced(data.store.sync_status)) {
+    return (
+      <div className="grid gap-4">
+        <StoreHeader data={data} />
+        <EmptyStoreBoard shopDomain={data.store.shop_domain} syncStatus={data.store.sync_status} />
+      </div>
+    );
+  }
   if (data.kpis.orders === 0) {
     return (
       <div className="grid gap-4">
         <StoreHeader data={data} />
         <DateRangeBar />
         <EmptyBoard
-          title="No included orders in this range"
-          body="Sync a store or widen the date range. Cancelled and fully refunded orders are excluded."
+          title="No orders in this date range"
+          body="MerchantOS is connected. There are no included paid orders in the selected dates. Widen the range, or import store data again from Settings."
         />
       </div>
     );
@@ -256,8 +270,8 @@ function StoreHeader({ data }: { data: Awaited<ReturnType<typeof fetchOverview>>
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Badge>{data.store.installed ? "Installed" : "Uninstalled"}</Badge>
-        <Badge>Sync {data.store.sync_status}</Badge>
+        <Badge>{data.store.installed ? "Connected" : "Disconnected"}</Badge>
+        <Badge>{syncStatusLabel(data.store.sync_status)}</Badge>
       </div>
     </div>
   );

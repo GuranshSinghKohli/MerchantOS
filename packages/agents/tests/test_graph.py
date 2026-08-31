@@ -155,6 +155,61 @@ def test_provider_and_timeout_errors_propagate() -> None:
         )
 
 
+def test_orchestrator_redacts_emails_from_llm_context() -> None:
+    class _PiiAnalytics(_FakeAnalytics):
+        def overview(self, ctx: TenantContext, filters: object) -> dict[str, object]:
+            body = super().overview(ctx, filters)
+            body["products"] = [
+                {"product_gid": "gid://shopify/Product/1", "title": "Contact jane@shop.test"}
+            ]
+            return body
+
+    llm = FakeLLM(
+        [
+            FakeTurn(
+                {
+                    "classification": "commerce_question",
+                    "plan": "read",
+                    "answer": "",
+                    "assumptions": [],
+                    "uncertainty": "",
+                    "confidence": 0.4,
+                    "next_steps": [],
+                    "evidence": [],
+                    "insufficient_data": False,
+                    "tool": {"name": "get_store_overview", "arguments": {"preset": "last_30"}},
+                }
+            ),
+            FakeTurn(
+                {
+                    "classification": "commerce_question",
+                    "plan": "answer",
+                    "answer": "Overview loaded.",
+                    "assumptions": [],
+                    "uncertainty": "",
+                    "confidence": 0.5,
+                    "next_steps": [],
+                    "evidence": [],
+                    "insufficient_data": False,
+                    "tool": None,
+                }
+            ),
+        ]
+    )
+    run_orchestrator(
+        llm=llm,
+        tools=build_commerce_registry(_PiiAnalytics()).for_agent("orchestrator"),  # type: ignore[arg-type]
+        tenant=_ctx(),
+        run_id=uuid4(),
+        request_id=uuid4(),
+        question="Email ada@example.com about revenue",
+    )
+    blob = str(llm.calls)
+    assert "jane@shop.test" not in blob
+    assert "ada@example.com" not in blob
+    assert "[redacted]" in blob
+
+
 def test_orchestrator_output_rejects_approval() -> None:
     with pytest.raises(ValidationError):
         OrchestratorOutput.model_validate(

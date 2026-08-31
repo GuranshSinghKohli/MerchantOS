@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { ConnectStoreBoard } from "@/components/empty-store";
 import { EmptyBoard, ErrorBoard, LoadingBoard } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,8 @@ import {
   fieldLabel,
   rejectAction,
 } from "@/lib/actions";
+import { isAuthError } from "@/lib/analytics";
+import { actionStatusLabel, riskLabel } from "@/lib/labels";
 import { useSessionStore } from "@/lib/use-session-store";
 
 const IN_FLIGHT = new Set(["QUEUED", "EXECUTING"]);
@@ -53,12 +56,15 @@ function ActionCard({
         <div className="grid gap-1">
           <CardTitle>{action.title}</CardTitle>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {fieldLabel(fields[0] ?? "title")} on {action.resource.gid}
+            {fieldLabel(fields[0] ?? "title")} on{" "}
+            {displayValue(action.before_state.title) === "—"
+              ? "a Shopify product"
+              : displayValue(action.before_state.title)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge className={statusTone(action.status)}>{action.status}</Badge>
-          <Badge>{action.risk_level} risk</Badge>
+          <Badge className={statusTone(action.status)}>{actionStatusLabel(action.status)}</Badge>
+          <Badge>{riskLabel(action.risk_level)}</Badge>
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
@@ -86,24 +92,22 @@ function ActionCard({
         </section>
         <section className="grid gap-1">
           <h2 className="font-medium">Where will it change?</h2>
-          <p>Shopify product {action.resource.gid}</p>
+          <p>A product in your connected Shopify store</p>
         </section>
         <section className="grid gap-1">
-          <h2 className="font-medium">Why is MerchantOS recommending this?</h2>
+          <h2 className="font-medium">Why is this recommended?</h2>
           <p>{action.rationale}</p>
-          {action.source_recommendation_id ? (
-            <p className="text-[hsl(var(--muted-foreground))]">
-              Source recommendation {action.source_recommendation_id}
-            </p>
-          ) : null}
           {action.evidence.length > 0 ? (
-            <ul className="list-disc pl-5 text-[hsl(var(--muted-foreground))]">
-              {action.evidence.map((item, index) => (
-                <li key={`${item.fact_id ?? "e"}-${index}`}>
-                  {item.source_tool ?? "evidence"} {item.fact_id ?? ""}
-                </li>
-              ))}
-            </ul>
+            <details className="rounded-md border p-3">
+              <summary className="cursor-pointer font-medium">Supporting evidence</summary>
+              <ul className="mt-2 list-disc pl-5 text-[hsl(var(--muted-foreground))]">
+                {action.evidence.map((item, index) => (
+                  <li key={`${item.fact_id ?? "e"}-${index}`}>
+                    Store data used for this recommendation
+                  </li>
+                ))}
+              </ul>
+            </details>
           ) : null}
         </section>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
@@ -121,7 +125,7 @@ function ActionCard({
                     : "text-[hsl(var(--muted-foreground))]"
                 }
               >
-                {step === "PROPOSED" ? "Pending" : step.charAt(0) + step.slice(1).toLowerCase()}
+                {actionStatusLabel(step)}
               </li>
             ))}
           </ol>
@@ -181,7 +185,10 @@ export function ActionsView({ pendingOnly = false }: { pendingOnly?: boolean }) 
     },
   });
   if (session.isLoading || request.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (request.isError) return <ErrorBoard message={(request.error as Error).message} />;
   const rows = request.data?.actions ?? [];
   const title = pendingOnly ? "Approvals" : "Actions";
@@ -190,8 +197,8 @@ export function ActionsView({ pendingOnly = false }: { pendingOnly?: boolean }) 
       <div className="grid gap-1">
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          MerchantOS can propose a Shopify product change. Only you can approve it. The model
-          cannot execute the mutation.
+          Review the current value and the proposed value. Only you can approve a change.
+          MerchantOS cannot update Shopify on its own.
         </p>
       </div>
       {decide.isError ? <ErrorBoard message={(decide.error as Error).message} /> : null}

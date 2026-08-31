@@ -1,6 +1,6 @@
 # MerchantOS Agent Architecture
 
-**Status:** Accepted (Phase 9 approval-gated mutations implemented 2026-08-26)  
+**Status:** Accepted (Phase 11 AgentBench + hardening 2026-08-31)  
 **Runtime:** LangGraph in the **agent** worker handler only  
 **Related:** [contracts.md](contracts.md), [mcp.md](mcp.md), [ADR 0008](adr/0008-llm-provider-port.md), [ADR 0012](adr/0012-capability-isolated-workers.md), [ADR 0013](adr/0013-proposal-vs-approval-types.md)
 
@@ -136,7 +136,11 @@ Opposite-sign `*_growth_pct` facts become unresolved `Contradiction` objects and
 
 Recommendation priority is CRITICAL / HIGH / MEDIUM / LOW. Deterministic ceiling: stockout + revenue facts can reach CRITICAL; revenue decline can reach HIGH; otherwise MEDIUM. The model may only stay or go lower.
 
-Bounds: 5 specialist tool calls, 2 LLM schema retries, 8s LLM timeout, 40s specialist budget, 90s intelligence lease, 3 job attempts, 3 specialists per intelligence run.
+Bounds: 5 specialist tool calls, 2 LLM schema retries, 8s LLM timeout, 40s specialist budget, 90s intelligence lease, 3 job attempts, 3 specialists per intelligence run. Orchestrator and intelligence graphs are DAGs (no node re-enters itself). Hitting a limit fails the run; it does not approve or mutate.
+
+Email-shaped strings are stripped from orchestrator and intelligence LLM context. Merchant/Shopify text stays untrusted DATA.
+
+Phase 11 AgentBench (`apps/agentbench`) measures agent selection, tool use, grounding, injection, tenant isolation, and fail-closed LLM/tool errors through production graph code and `FakeLLM`. See [evaluation.md](evaluation.md).
 
 ### Strategy
 

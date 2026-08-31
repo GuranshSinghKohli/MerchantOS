@@ -8,3 +8,4 @@ Built from the shipped UI. Inspiration: Shopify Admin, Linear, Vercel (ADR 0019)
 - System sans, tabular numbers on KPIs
 - Sidebar rail on desktop; dialog nav on small screens
 - Motion: 200ms card entrance, disabled under `prefers-reduced-motion`
+- Phase 12: Ask MerchantOS is a first-class rail item. Empty stores hide zero KPIs. Approval cards show current → proposed in merchant language.

@@ -31,6 +31,61 @@ describe("dashboard states", () => {
     expect(screen.getByText("No included orders in this range")).toBeTruthy();
   });
 
+  it("explains an unsynced store instead of showing zero KPIs", async () => {
+    vi.mocked(fetchSession).mockResolvedValue({
+      store_id: "s",
+      shop_domain: "empty.myshopify.com",
+    });
+    vi.mocked(fetchOverview).mockResolvedValue({
+      request_id: "req",
+      store: {
+        store_id: "s",
+        shop_domain: "empty.myshopify.com",
+        timezone: "UTC",
+        currency: "USD",
+        installed: true,
+        sync_status: "not_started",
+      },
+      range: {
+        current: { start_local: "2026-08-01", end_local_exclusive: "2026-08-27", timezone: "UTC" },
+        previous: { start_local: "2026-07-06", end_local_exclusive: "2026-08-01" },
+        compare: "previous_period",
+      },
+      kpis: {
+        revenue: "0.00",
+        orders: 0,
+        aov: null,
+        customers: 0,
+        new_customers: 0,
+        returning_customers: 0,
+        cancelled_orders: 0,
+        growth_pct: { revenue: null, orders: null, customers: null, aov: null },
+        previous: { revenue: "0.00", orders: 0, aov: null, customers: 0 },
+      },
+      trends: { revenue: [], customers: [] },
+      products: [],
+      inventory: {
+        tracked_variants: 0,
+        in_stock_variants: 0,
+        out_of_stock_variants: 0,
+        available_units: 0,
+        on_hand_units: 0,
+        utilization_pct: null,
+      },
+      health: {
+        score: null,
+        status: "insufficient_data",
+        summary: "",
+        label: "",
+        components: [],
+      },
+      opportunities: [],
+    });
+    render(wrap(<OverviewView />));
+    expect(await screen.findByText("Import your Shopify store to see insights")).toBeTruthy();
+    expect(screen.queryByText("$0.00")).toBeNull();
+  });
+
   it("renders a merchant-safe error", () => {
     render(<ErrorBoard message="Sign in by installing MerchantOS on your Shopify store." />);
     expect(screen.getByText("We could not load this view")).toBeTruthy();

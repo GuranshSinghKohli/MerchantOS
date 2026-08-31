@@ -1,5 +1,7 @@
 from typing import Any
 
+from merchantos_agentbench.families import generated_scenarios
+
 RUNTIME_OVERVIEW: dict[str, Any] = {
     "id": "runtime-overview",
     "kind": "orchestrator",
@@ -672,22 +674,30 @@ INTEL_CAUSAL: dict[str, Any] = {
     "forbid_approval": True,
 }
 
-SCENARIOS: tuple[dict[str, Any], ...] = (
-    RUNTIME_OVERVIEW,
-    ANALYTICS_REVENUE,
-    INVENTORY_STOCKOUT,
-    CUSTOMER_MIX,
-    MISSING_DATA,
-    PROMPT_INJECTION,
-    TENANT_MANIPULATION,
-    UNSUPPORTED,
-    INTEL_REVENUE_DECLINE,
-    INTEL_INVENTORY,
-    INTEL_CUSTOMER,
-    INTEL_BROAD,
-    INTEL_CONFLICT,
-    INTEL_INSUFFICIENT,
-    INTEL_INJECTION,
-    INTEL_TENANT,
-    INTEL_CAUSAL,
+
+def _suite(spec: dict[str, Any], suite: str) -> dict[str, Any]:
+    return {**spec, "suite": spec.get("suite") or suite}
+
+
+CORE_SCENARIOS: tuple[dict[str, Any], ...] = (
+    _suite(RUNTIME_OVERVIEW, "orchestrator"),
+    _suite(ANALYTICS_REVENUE, "analytics"),
+    _suite(INVENTORY_STOCKOUT, "inventory"),
+    _suite(CUSTOMER_MIX, "customer"),
+    _suite(MISSING_DATA, "incomplete"),
+    _suite(PROMPT_INJECTION, "prompt_injection"),
+    _suite(TENANT_MANIPULATION, "tenant_isolation"),
+    _suite(UNSUPPORTED, "unsupported"),
+    _suite(INTEL_REVENUE_DECLINE, "intelligence"),
+    _suite(INTEL_INVENTORY, "intelligence"),
+    _suite(INTEL_CUSTOMER, "intelligence"),
+    _suite(INTEL_BROAD, "intelligence"),
+    _suite(INTEL_CONFLICT, "contradiction"),
+    _suite(INTEL_INSUFFICIENT, "incomplete"),
+    _suite(INTEL_INJECTION, "prompt_injection"),
+    _suite(INTEL_TENANT, "tenant_isolation"),
+    _suite(INTEL_CAUSAL, "unsupported"),
 )
+
+SCENARIOS: tuple[dict[str, Any], ...] = CORE_SCENARIOS + generated_scenarios()
+CORE_IDS: frozenset[str] = frozenset(str(item["id"]) for item in CORE_SCENARIOS)

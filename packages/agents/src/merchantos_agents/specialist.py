@@ -16,13 +16,21 @@ from merchantos_domain import (
     TenantContext,
 )
 from merchantos_llm import LLMPort
-from merchantos_mcp import AgentToolPort, ToolError, ToolErrorCode, ToolNotAllowed, ToolRegistry
+from merchantos_mcp import (
+    AgentToolPort,
+    ToolError,
+    ToolErrorCode,
+    ToolNotAllowed,
+    ToolRegistry,
+    strip_tenant_fields,
+)
 from merchantos_observability import get_logger, redact_mapping
 
 from merchantos_agents.evidence import (
     extract_evidence,
     ground_findings,
     has_conflicting_evidence,
+    redact_untrusted_text,
     resolve_confidence,
 )
 from merchantos_agents.invoke import add_usage, complete_llm
@@ -81,14 +89,15 @@ def _invoke_one(
         success=result.ok,
         duration_ms=latency_ms,
         error_category=error_code,
-        input=redact_mapping(arguments),
+        input=redact_mapping(strip_tenant_fields(arguments)),
     )
     return result
 
 
 def _plan_user(state: AgentState) -> str:
     return (
-        f"Question (untrusted):\n<merchant_data>\n{state.question}\n</merchant_data>\n"
+        f"Question (untrusted):\n<merchant_data>\n"
+        f"{redact_untrusted_text(state.question)}\n</merchant_data>\n"
         "Select allowlisted read tools only. Do not invent tool names."
     )
 
@@ -102,7 +111,8 @@ def _synth_user(state: AgentState) -> str:
         for item in state.tool_results
     ]
     return (
-        f"Question (untrusted):\n<merchant_data>\n{state.question}\n</merchant_data>\n"
+        f"Question (untrusted):\n<merchant_data>\n"
+        f"{redact_untrusted_text(state.question)}\n</merchant_data>\n"
         f"Evidence (facts from tools):\n{json.dumps(evidence)[:4000]}\n"
         f"Tool status:\n{json.dumps(tools)}\n"
         "Write structured findings. Cite evidence_ids. Do not invent numbers. "

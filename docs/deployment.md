@@ -185,6 +185,31 @@ Alarms (SNS email when `alarm_email` is set):
 
 Never log access tokens, passwords, API keys, or full sensitive payloads.
 
+### CloudWatch Logs Insights (Phase 11)
+
+Filter groups `/ecs/merchantos-staging` (edge) and `/ecs/merchantos-staging-worker`. Correlate with `request_id` then `run_id` / `job_id` / `action_id`.
+
+```
+fields @timestamp, request_id, run_id, job_id, action_id, merchant_id, error_category, duration_ms
+| filter ispresent(request_id) or ispresent(run_id) or ispresent(action_id)
+| sort @timestamp desc
+| limit 50
+```
+
+```
+fields @timestamp, tool_name, success, duration_ms, error_category, run_id, request_id
+| filter tool_name like /get_/
+| stats count() as calls, avg(duration_ms) as avg_ms by tool_name
+```
+
+```
+fields @timestamp, error_category, retry_count, run_id, request_id
+| filter error_category like /Timeout|Throttl|Provider|expired/
+| sort @timestamp desc
+```
+
+Do not select raw payload fields. Tokens and emails are redacted at the logger.
+
 ## Domain / TLS / Shopify
 
 Operator procedure: [staging-https.md](staging-https.md).

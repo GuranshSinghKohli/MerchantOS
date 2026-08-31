@@ -82,7 +82,7 @@ describe("actions view", () => {
     });
     render(wrap(<ActionsView />));
     expect(await screen.findByText("verification failed")).toBeTruthy();
-    expect(screen.getByText("EXPIRED")).toBeTruthy();
+    expect(screen.getByText("Expired")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Approve Change" })).toBeNull();
   });
 });

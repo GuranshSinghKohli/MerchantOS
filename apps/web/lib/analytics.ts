@@ -95,6 +95,7 @@ export type OverviewResponse = {
 export type SessionContext = {
   store_id: string;
   shop_domain: string;
+  installed?: boolean;
 };
 
 export function fetchSession(): Promise<SessionContext> {
@@ -131,6 +132,10 @@ export async function fetchJson<T>(path: string): Promise<T> {
     throw new Error(body?.detail ?? "We could not load this view. Try again.");
   }
   return (await response.json()) as T;
+}
+
+export function isAuthError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("installing MerchantOS");
 }
 
 export function fetchOverview(query: AnalyticsQuery): Promise<OverviewResponse> {

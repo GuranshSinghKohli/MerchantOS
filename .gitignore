@@ -30,6 +30,7 @@ apps/web/out/
 
 # Tooling
 .uv/
+artifacts/eval/latest.json
 
 # Terraform
 **/.terraform/

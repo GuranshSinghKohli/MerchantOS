@@ -2,18 +2,86 @@
 
 AI-native commerce operating system for Shopify merchants.
 
-Phase 9 adds merchant-approved, allowlisted Shopify product mutations. The model may propose; only an authenticated merchant can approve; a deterministic worker executes.
+MerchantOS is a real Shopify app: official OAuth, encrypted tokens, Admin API reads, approval-gated product writes, and a merchant dashboard. It is not a chatbot bolted onto Shopify Admin, and it is not a Shopify clone.
 
-Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md). Architecture: [`docs/architecture.md`](docs/architecture.md).
+**The model recommends. The merchant approves. Deterministic code executes.**
 
-## Prerequisites
+Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) · Architecture: [`docs/architecture.md`](docs/architecture.md) · Release: [`docs/FINAL_RELEASE.md`](docs/FINAL_RELEASE.md) · Demo: [`docs/demo.md`](docs/demo.md)
 
-- Python 3.12
-- [uv](https://docs.astral.sh/uv/)
-- Node.js 22 and [pnpm](https://pnpm.io) 9
-- Docker Desktop **running**. The `docker` CLI and Compose plugin must be on PATH (Postgres 16, Redis 7, ElasticMQ).
+## Problem
 
-## Local setup
+Merchants get dashboards full of charts and chatbots that invent numbers or, worse, write to the store. MerchantOS separates reasoning from authority: LangGraph agents may read allowlisted tools and propose a change. They cannot approve it, pick a tenant, or call Shopify.
+
+## What it does
+
+- Connect a development store with standalone Shopify OAuth
+- Import catalog and order data into a tenant-scoped projection
+- Show revenue, orders, inventory, and customers from that projection
+- Answer a business question with evidence, confidence, and limits
+- Recommend a product change with current vs proposed state
+- Require an explicit merchant approval before any mutation
+- Execute a typed Shopify write, verify it, and keep an audit trail
+
+## Architecture
+
+```
+Merchant
+  → Next.js dashboard (apps/web)
+  → FastAPI (apps/api)
+  → LangGraph agents (packages/agents)
+  → MCP-compatible read tools (packages/mcp)
+  → Analytics / Policy / Approval services (packages/app)
+  → PostgreSQL
+  → Shopify Admin GraphQL (reads + typed mutator)
+```
+
+```
+Recommendation
+  → ActionProposal
+  → Merchant approval (session only)
+  → ApprovedAction.load
+  → SQS {job_kind, job_id}
+  → Worker (no LLM on the execution path)
+  → ShopifyMutator
+  → Re-read verification + audit
+```
+
+```
+Internet → HTTPS (Caddy on ECS)
+  → API :8000 + web :3000 on localhost
+Worker (Fargate Spot, no inbound)
+  → private RDS + SQS + Secrets Manager
+```
+
+There is **no execute MCP tool**, **no pgvector**, **no Kubernetes**, **no ALB**, **no NAT Gateway**.
+
+## Agents and MCP
+
+Allowlisted specialists: Analytics, Inventory, Customer, plus an Intelligence graph that synthesizes them. Strategy and Action Planner are specified and **not registered**.
+
+Tools are an in-process registry (`ToolPort.for_agent`). Tenant identity comes from `TenantContext.from_session` / `from_job_row` only. Unknown tools, SQL, HTTP, and shell names fail closed.
+
+## Safety
+
+| Actor | May do | Must not do |
+|-------|--------|-------------|
+| LLM | Reason, call read tools, draft recommendation text | Approve, construct `ApprovedAction`, pick tenant, call Shopify |
+| Merchant session | Approve or reject | Bypass policy or change risk |
+| Execution worker | Typed mutator after `ApprovedAction.load` | Run the model |
+
+Risk is assigned from `ACTION_RISK_TABLE` + affected count. CRITICAL deletes and bulk price changes are blocked.
+
+## Stack
+
+Next.js 15 / React 19 / Tailwind 3.4 / shadcn + Lucide + TanStack Query · FastAPI / Pydantic · LangGraph · PostgreSQL · SQS · ECS Fargate · RDS · Secrets Manager · Terraform · GitHub Actions.
+
+## AWS and cost
+
+Staging is live under a DuckDNS hostname (see [`docs/staging-https.md`](docs/staging-https.md)). Production Terraform apply is **operator-gated**.
+
+Honest idle cost for one environment: **~$33–40/month** ([`docs/aws-cost.md`](docs/aws-cost.md), [ADR 0025](docs/adr/0025-portfolio-cost-envelope.md)).
+
+## Local development
 
 ```bash
 cp .env.example .env
@@ -22,83 +90,74 @@ make up
 make migrate
 ```
 
-Run the three processes in separate terminals:
-
 ```bash
 make api      # http://localhost:8000/health  /ready
-make worker   # sync + webhook consumer (WORKER_ONCE=1 drains one batch and exits)
+make worker
 make web      # http://localhost:3000
 ```
 
-`GET /health` does not require dependencies. `GET /ready` requires Postgres. Redis is required only when `REDIS_URL` is set.
+`GET /health` does not need dependencies. `GET /ready` needs Postgres. Redis is required only when `REDIS_URL` is set.
 
-If `docker` is missing after installing Docker Desktop on macOS, prepend the app CLI **before** `make up`. A new shell does not keep this unless you add it to your profile:
+Open `/install` and enter `{store}.myshopify.com`. Tokens never reach the browser.
 
-```bash
-export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
-```
-
-If `docker compose` is still unknown, expose Desktop’s Compose plugin:
+## Staging
 
 ```bash
-mkdir -p ~/.docker/cli-plugins
-ln -sf /Applications/Docker.app/Contents/Resources/cli-plugins/docker-compose ~/.docker/cli-plugins/docker-compose
+scripts/smoke.sh https://merchantos.duckdns.org
+scripts/edge-public-ip.sh   # after every edge replace, update DuckDNS first
 ```
 
-Integration tests run whenever `DATABASE_URL` is set (including via `.env`). They fail if Compose is down; they do not skip.
+After OAuth, Overview shows **Connected**. If commerce sync has not run, the dashboard explains that and offers **Import store data** instead of fake zeros.
 
-## Quality
+## Testing and evaluation
 
 ```bash
 make lint
 make typecheck
 make test
+uv run python -m merchantos_agentbench.runner
 ```
 
-## Layout
+CI uses `FakeLLM`. Live-model AgentBench is operator-gated. Baseline: [`artifacts/eval/baseline.json`](artifacts/eval/baseline.json). Methodology: [`docs/evaluation.md`](docs/evaluation.md).
+
+## Security
+
+Tenant isolation at API, repositories, tools, and FORCE RLS. Secrets in AWS Secrets Manager / gitignored `.env`. Prompt injection is treated as untrusted merchant data. See [`docs/security.md`](docs/security.md).
+
+## Project structure
 
 ```
 apps/api          FastAPI
-apps/worker       Sync + webhook + agent + execution workers
-apps/web          Next.js dashboard
-packages/domain   TenantContext, QueueMessage, proposal types
-packages/app      Analytics, policy, approval services
-packages/mcp      In-process read-tool registry (no execute tools)
-packages/llm      LLMPort, FakeLLM, OpenAI adapter
-packages/agents   LangGraph orchestrator (no ApprovedAction / mutator)
-apps/agentbench   Deterministic runtime evaluation harness
-packages/observability  JSON logs, redaction, CloudWatch EMF
-packages/db       SQLAlchemy + Alembic + migrate CLI
-packages/shopify  OAuth, HMAC, GraphQL Admin 2026-07, typed mutator
-packages/queue    QueuePort, InMemory, ElasticMQ (dev), AwsSqsQueue (AWS)
-infra/docker      Compose dependencies + production image smoke
-infra/terraform   Staging/production AWS (ECR, ECS, RDS, Redis, SQS)
+apps/worker       Sync, webhooks, agents, execution
+apps/web          Merchant dashboard
+apps/agentbench   Deterministic evaluation harness
+packages/*        Domain, MCP, agents, Shopify, DB, queue
+infra/terraform   Staging / production AWS
+docs/             Architecture, ADRs, demo, release
 ```
 
-## Shopify install (Phase 2)
+## Design decisions
 
-1. Create a Shopify Dev Dashboard / Partner app (standalone, not embedded).
-2. Copy client id/secret into `.env` (`SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`).
-3. Generate `TOKEN_ENCRYPTION_KEY` (32-byte urlsafe base64).
-4. Set `SHOPIFY_REDIRECT_URI` to an allowlisted HTTPS callback (local: a tunnel such as ngrok or Cloudflare Tunnel, then `/api/v1/auth/shopify/callback`).
-5. Put the same callback in `shopify.app.toml` `[auth].redirect_urls` and in the Dev Dashboard.
-6. Open `http://localhost:3000/install` and enter `{store}.myshopify.com`.
+ADRs live in [`docs/adr/`](docs/adr/). Current ones that interviewers usually want: 0012 capability-isolated workers, 0013 proposal vs approval types, 0014 tenant from job row, 0021 MCP read permissions, 0023 human-approved mutations, 0025 portfolio cost envelope, 0026 eval/hardening, 0027 productization.
 
-The browser never receives the offline access token. `GET /api/v1/me` returns shop + scopes only.
+## Screenshots and demo
 
-Metric definitions: [`docs/metrics.md`](docs/metrics.md). Dashboard visual system: [`docs/DESIGN.md`](docs/DESIGN.md).
+Walkthrough: [`docs/demo.md`](docs/demo.md). Capture screenshots from a real local or staging session after deploy — Overview, Ask MerchantOS, evidence, Approvals, and Actions. Do not paste invented KPI numbers.
 
-## AWS (Phase 10)
+Staging may be empty until import. That empty state is the honest screenshot, not a fake dashboard.
 
-Terraform lives in `infra/terraform/`. See [`docs/deployment.md`](docs/deployment.md), [`docs/staging-https.md`](docs/staging-https.md), and [ADR 0025](docs/adr/0025-portfolio-cost-envelope.md).
+## Limitations
 
-Live apply needs an AWS account, a unique state bucket, and (for Shopify OAuth) an HTTPS domain. This repository does not contain AWS credentials.
+- V1 mutations: product title, description, tags, status (`ACTIVE`/`DRAFT`) only
+- Token refresh is not implemented; GraphQL 401 fails closed
+- Live-model quality is not a CI gate
+- Production AWS is not auto-applied
+- Empty development stores stay empty until import/sync runs — that is honest, not a demo fake
 
-```
-make image-build
-make tf-validate
-```
+## Future (not started)
 
-## What is not here yet
+Token refresh, richer mutations after a new ADR, live-model eval lane, optional ALB if cost allows. There is no Phase 13 in this repository.
 
-MCP HTTP, Sidekick, token refresh, and later product phases. Do not start Phase 11 from the README.
+## License / use
+
+Portfolio prototype. Development-store data only unless an operator applies production Terraform with a separate account and secrets.

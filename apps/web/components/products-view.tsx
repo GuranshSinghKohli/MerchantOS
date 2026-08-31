@@ -10,6 +10,7 @@ import {
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { DateRangeBar } from "@/components/date-range-bar";
+import { ConnectStoreBoard } from "@/components/empty-store";
 import { EmptyBoard, ErrorBoard, LoadingBoard } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ import {
   type DatePreset,
   fetchProducts,
   formatMoney,
+  isAuthError,
   isQueryReady,
 } from "@/lib/analytics";
 import { useSessionStore } from "@/lib/use-session-store";
@@ -73,7 +75,10 @@ export function ProductsView() {
     getCoreRowModel: getCoreRowModel(),
   });
   if (session.isLoading) return <LoadingBoard />;
-  if (session.isError) return <ErrorBoard message={(session.error as Error).message} />;
+  if (session.isError) {
+    if (isAuthError(session.error)) return <ConnectStoreBoard />;
+    return <ErrorBoard message={(session.error as Error).message} />;
+  }
   if (!isQueryReady(query)) {
     return (
       <div className="grid gap-4">
@@ -91,7 +96,10 @@ export function ProductsView() {
       <div className="grid gap-4">
         <h1 className="text-xl font-semibold">Products</h1>
         <DateRangeBar />
-        <EmptyBoard title="No products" body="Sync the catalog or wait for the first projection." />
+        <EmptyBoard
+          title="No products in this range"
+          body="If the store is connected but not imported, use Import store data on Overview or Settings. MerchantOS will not invent catalog numbers."
+        />
       </div>
     );
   }

@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "MerchantOS",
-  description: "Deterministic commerce analytics for Shopify merchants",
+  description: "AI-native commerce OS for Shopify merchants. The model recommends. You approve.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

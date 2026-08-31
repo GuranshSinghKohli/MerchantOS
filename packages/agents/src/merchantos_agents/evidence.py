@@ -32,6 +32,20 @@ _INV_KEYS = (
 )
 
 
+def redact_untrusted_text(value: str) -> str:
+    return _EMAIL.sub("[redacted]", value)
+
+
+def redact_untrusted_payload(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_untrusted_text(value)
+    if isinstance(value, dict):
+        return {key: redact_untrusted_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact_untrusted_payload(item) for item in value]
+    return value
+
+
 def _text(value: object, *, merchant: bool = False) -> str:
     raw = " ".join(str(value).split())
     if _EMAIL.search(raw):

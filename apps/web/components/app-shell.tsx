@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Lightbulb,
   Menu,
+  MessageSquare,
   Moon,
   Package,
   ClipboardCheck,
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/ask", label: "Ask MerchantOS", icon: MessageSquare },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/products", label: "Products", icon: Package },
   { href: "/inventory", label: "Inventory", icon: Boxes },
