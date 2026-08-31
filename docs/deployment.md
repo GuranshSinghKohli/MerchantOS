@@ -145,7 +145,7 @@ Frontend receives no server secrets. `API_UPSTREAM` is localhost for the Next se
 
 Pull requests (`.github/workflows/ci.yml`): ruff, mypy, pytest, web lint/typecheck/vitest, `terraform fmt` + `validate`.
 
-Main (`.github/workflows/deploy.yml`) deploys staging. Job `if` must not gate on environment `vars` — those are invisible until the job starts, which skipped the first push. Both jobs use `environment: staging`.
+Main (`.github/workflows/deploy.yml`) deploys staging. Both jobs use `environment: staging`. The GitHub OIDC `sub` is then `repo:<owner>/<repo>:environment:staging`, so the IAM role must allow that subject (not only `ref:refs/heads/main`). Do not gate jobs on environment `vars` in `if` — those are invisible until the job starts.
 
 1. Build `linux/arm64` images
 2. Trivy (CRITICAL/HIGH fail)
