@@ -15,6 +15,8 @@ RUN pnpm --filter @merchantos/web build
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 RUN useradd --uid 65532 --create-home --shell /usr/sbin/nologin app
+# HOSTNAME must also be set on the ECS web container. Fargate overwrites this image ENV
+# with the task hostname, and Next binds only there (Caddy 127.0.0.1:3000 → 502).
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build /repo/apps/web/public ./apps/web/public
 COPY --from=build /repo/apps/web/.next/standalone ./

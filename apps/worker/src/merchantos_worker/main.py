@@ -27,9 +27,10 @@ from merchantos_worker.settings import WorkerSettings
 def build_runtime(settings: WorkerSettings) -> WorkerRuntime:
     engine = create_db_engine(settings.database_url)
     ping_database(engine)
-    redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
-    if redis_client.ping() is not True:
-        raise RuntimeError("Redis ping failed")
+    if settings.redis_url:
+        redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
+        if redis_client.ping() is not True:
+            raise RuntimeError("Redis ping failed")
     queue = create_queue(
         endpoint_url=settings.sqs_endpoint_url,
         queue_name=settings.sqs_queue_name,

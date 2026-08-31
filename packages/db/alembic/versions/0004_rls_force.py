@@ -86,7 +86,13 @@ def upgrade() -> None:
             CREATE ROLE merchantos_app LOGIN PASSWORD 'merchantos'
               NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
           END IF;
-          ALTER ROLE merchantos_app NOSUPERUSER NOBYPASSRLS;
+          -- RDS master cannot ALTER SUPERUSER/BYPASSRLS; CREATE already set them.
+          BEGIN
+            ALTER ROLE merchantos_app NOSUPERUSER NOBYPASSRLS;
+          EXCEPTION
+            WHEN insufficient_privilege THEN
+              NULL;
+          END;
         END
         $$;
         """

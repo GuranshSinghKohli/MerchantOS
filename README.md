@@ -30,7 +30,7 @@ make worker   # sync + webhook consumer (WORKER_ONCE=1 drains one batch and exit
 make web      # http://localhost:3000
 ```
 
-`GET /health` does not require dependencies. `GET /ready` requires Postgres and Redis.
+`GET /health` does not require dependencies. `GET /ready` requires Postgres. Redis is required only when `REDIS_URL` is set.
 
 If `docker` is missing after installing Docker Desktop on macOS, prepend the app CLI **before** `make up`. A new shell does not keep this unless you add it to your profile:
 
@@ -90,7 +90,7 @@ Metric definitions: [`docs/metrics.md`](docs/metrics.md). Dashboard visual syste
 
 ## AWS (Phase 10)
 
-Terraform lives in `infra/terraform/`. See [`docs/deployment.md`](docs/deployment.md) and [ADR 0024](docs/adr/0024-cost-optimized-aws-network.md).
+Terraform lives in `infra/terraform/`. See [`docs/deployment.md`](docs/deployment.md), [`docs/staging-https.md`](docs/staging-https.md), and [ADR 0025](docs/adr/0025-portfolio-cost-envelope.md).
 
 Live apply needs an AWS account, a unique state bucket, and (for Shopify OAuth) an HTTPS domain. This repository does not contain AWS credentials.
 

@@ -1,3 +1,6 @@
+# Optional module. AWS production does not deploy ElastiCache (ADR 0025).
+# Keep for a future high-traffic env that actually needs shared rate limits.
+
 terraform {
   required_providers {
     aws = {

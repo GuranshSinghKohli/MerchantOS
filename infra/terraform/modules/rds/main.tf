@@ -16,6 +16,10 @@ variable "vpc_id" { type = string }
 variable "subnet_ids" { type = list(string) }
 variable "client_security_group_ids" { type = list(string) }
 variable "deletion_protection" { type = bool }
+variable "backup_retention_period" {
+  type    = number
+  default = 1
+}
 
 resource "random_password" "master" {
   length  = 24
@@ -64,7 +68,7 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids       = [aws_security_group.db.id]
   publicly_accessible          = false
   multi_az                     = false
-  backup_retention_period      = 7
+  backup_retention_period      = var.backup_retention_period
   backup_window                = "07:00-08:00"
   maintenance_window           = "sun:08:00-sun:09:00"
   deletion_protection          = var.deletion_protection
@@ -87,10 +91,10 @@ output "app_password" {
 }
 output "security_group_id" { value = aws_security_group.db.id }
 output "master_url" {
-  value     = "postgresql://${aws_db_instance.this.username}:${random_password.master.result}@${aws_db_instance.this.address}:5432/merchantos"
+  value     = "postgresql://${aws_db_instance.this.username}:${random_password.master.result}@${aws_db_instance.this.address}:5432/merchantos?sslmode=require"
   sensitive = true
 }
 output "app_url" {
-  value     = "postgresql://merchantos_app:${random_password.app.result}@${aws_db_instance.this.address}:5432/merchantos"
+  value     = "postgresql://merchantos_app:${random_password.app.result}@${aws_db_instance.this.address}:5432/merchantos?sslmode=require"
   sensitive = true
 }

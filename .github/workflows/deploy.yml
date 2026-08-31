@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        service: [api, worker, web]
+        service: [api, worker, web, caddy]
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -28,9 +28,14 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build
         run: |
-          docker buildx build --platform linux/arm64 --load \
-            -f "apps/${{ matrix.service }}/Dockerfile" \
-            -t "local/${{ matrix.service }}:${{ github.sha }}" .
+          if [ "${{ matrix.service }}" = "caddy" ]; then
+            docker buildx build --platform linux/arm64 --load \
+              -f infra/caddy/Dockerfile -t "local/caddy:${{ github.sha }}" infra/caddy
+          else
+            docker buildx build --platform linux/arm64 --load \
+              -f "apps/${{ matrix.service }}/Dockerfile" \
+              -t "local/${{ matrix.service }}:${{ github.sha }}" .
+          fi
       - name: Scan
         uses: aquasecurity/trivy-action@0.28.0
         with:

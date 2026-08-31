@@ -9,8 +9,7 @@ terraform {
 
 variable "name" { type = string }
 variable "alarm_email" { type = string }
-variable "alb_arn_suffix" { type = string }
-variable "api_target_group_arn_suffix" { type = string }
+variable "cluster_name" { type = string }
 variable "queue_name" { type = string }
 variable "dlq_name" { type = string }
 
@@ -25,36 +24,34 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alarm_email
 }
 
+resource "aws_cloudwatch_metric_alarm" "edge_stopped" {
+  alarm_name          = "${var.name}-edge-not-running"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 0.01
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    ClusterName = var.cluster_name
+    ServiceName = "edge"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "api_5xx" {
   alarm_name          = "${var.name}-api-5xx"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
-  metric_name         = "HTTPCode_Target_5XX_Count"
-  namespace           = "AWS/ApplicationELB"
+  metric_name         = "api_5xx"
+  namespace           = "MerchantOS/${var.name}"
   period              = 300
   statistic           = "Sum"
   threshold           = 5
+  treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-  dimensions = {
-    LoadBalancer = var.alb_arn_suffix
-    TargetGroup  = var.api_target_group_arn_suffix
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "unhealthy" {
-  alarm_name          = "${var.name}-unhealthy-hosts"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "UnHealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Maximum"
-  threshold           = 0
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-  dimensions = {
-    LoadBalancer = var.alb_arn_suffix
-    TargetGroup  = var.api_target_group_arn_suffix
-  }
 }
 
 resource "aws_cloudwatch_metric_alarm" "queue_age" {

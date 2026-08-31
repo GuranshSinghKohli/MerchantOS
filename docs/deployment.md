@@ -1,7 +1,7 @@
 # MerchantOS Deployment and Infrastructure
 
 **Status:** Phase 10 accepted  
-**Related:** [ADR 0006](adr/0006-ecs-fargate-not-kubernetes.md), [ADR 0010](adr/0010-sqs-async-workers.md), [ADR 0024](adr/0024-cost-optimized-aws-network.md)
+**Related:** [ADR 0006](adr/0006-ecs-fargate-not-kubernetes.md), [ADR 0024](adr/0024-cost-optimized-aws-network.md), [ADR 0025](adr/0025-portfolio-cost-envelope.md), [staging HTTPS runbook](staging-https.md)
 
 ## Environments
 
@@ -32,47 +32,47 @@ make image-build
 docker compose -f infra/docker/compose.yml -f infra/docker/compose.images.yml up --build
 ```
 
-`GET /health` does not require dependencies. `GET /ready` requires Postgres and Redis. Queue probe is `/ready/queue` and stays optional in dev.
+`GET /health` does not require dependencies. `GET /ready` requires Postgres. Redis is required only when `REDIS_URL` is set (Compose/dev). Queue probe is `/ready/queue` and stays optional in dev.
 
 Phase 2 OAuth/webhooks still need a public HTTPS tunnel when developing locally. `shopify.app.toml` `redirect_urls` must match exactly.
 
 ## AWS architecture
 
 ```
-Internet
+Route 53 A record (hostname)
    ↓
-ALB  (HTTP; HTTPS + redirect when domain_name is set)
-  ↙ /api/* /health /ready     ↘ default
-ECS api                        ECS web
+current edge task public IPv4  (changes when the task is replaced)
    ↓
-ECS worker  (no public listener)
+Caddy :80/:443  (Let's Encrypt when domain_name is set)
+  → API :8000 and web :3000 on localhost
+ECS worker (Fargate Spot, no inbound)
    ↓
-RDS (private)   Redis (private)   SQS + DLQ
+RDS (private)   SQS + DLQ
 Secrets Manager   CloudWatch
 ```
 
+The hostname is stable. The **task IP is not**. After every edge replace, update the A record ([staging-https.md](staging-https.md)). Do not front this with an ALB unless a new ADR replaces 0025.
+
 | Service | Why it exists |
 |---------|----------------|
-| ECR | Immutable API, worker, web images |
-| ECS Fargate ARM64 | Independently scaled api / worker / web; migrate as RunTask |
-| ALB | Path routing and (optional) TLS |
+| ECR | Immutable API, worker, web, Caddy images |
+| ECS Fargate ARM64 | `edge` (Caddy+API+web) on-demand; `worker` on Spot; migrate as RunTask |
+| Caddy | Public 80/443 and Let's Encrypt (no ALB) |
 | RDS PostgreSQL 16 `db.t4g.micro` | Encrypted, private, 7-day backups |
-| ElastiCache Redis 7 `cache.t4g.micro` | Required by `/ready` and rate limits; TLS + auth |
 | SQS + DLQ | `{job_kind, job_id}` only; visibility 120s; maxReceiveCount 5 |
-| Secrets Manager | DB, Redis, token DEK, Shopify, OpenAI |
+| Secrets Manager | DB, token DEK, Shopify, OpenAI |
 | CloudWatch | 7-day logs + EMF metrics + four alarms |
 | IAM | Separate execution / api / worker / GitHub OIDC roles |
-| ACM | Only when `domain_name` is provided |
 
-Not used in V1: NAT Gateway, interface VPC endpoints, Kubernetes, pgvector, CloudFront, Route 53 (unless you already have a zone), always-on S3 app bucket.
+Not used in V1: NAT Gateway, ALB, ElastiCache, interface VPC endpoints, Kubernetes, pgvector, CloudFront, always-on S3 app bucket. Route 53 is optional DNS for the A record (~$0.50/month for a hosted zone). See [aws-cost.md](aws-cost.md).
 
 ## Networking ([ADR 0024](adr/0024-cost-optimized-aws-network.md))
 
-- Public subnets: ALB + ECS tasks with `assign_public_ip = true` (egress to Shopify, LLM, AWS APIs; no NAT)
-- Private isolated subnets: RDS and Redis only; no internet route
-- Security groups: ALB 80/443 from the internet; ECS 8000/3000 from the ALB; ECS self on 8000 for Cloud Map; 5432/6379 from ECS only
-- RDS `publicly_accessible = false`; Redis has no public endpoint
-- Worker has no load-balancer listener
+- Public subnet: `edge` task (80/443) and `worker` (egress only), `assign_public_ip = true` (no NAT)
+- Private isolated subnets: RDS only; no internet route
+- Security groups: edge 80/443 from the internet; worker no inbound; RDS 5432 from edge+worker only
+- RDS `publicly_accessible = false`
+- No ElastiCache
 
 ## Terraform
 
@@ -92,7 +92,7 @@ infra/terraform/
 2. `cd infra/terraform/bootstrap && terraform init && terraform apply -var bucket_name=<unique>`
 3. Replace `merchantos-tfstate-replace-me` in the env backend blocks with that bucket.
 4. `cd envs/staging && terraform init`
-5. First apply **without** services (creates ECR/RDS/Redis/SQS/ALB):
+5. First apply **without** services (creates ECR/RDS/SQS, no ALB/Redis):
 
    `terraform apply -var='enable_services=false'`
 
@@ -100,8 +100,8 @@ infra/terraform/
 7. Build and push ARM64 images tagged with a git SHA (never `latest` as the release id).
 8. `terraform apply -var='enable_services=true' -var='image_tag=<sha>'`
 9. Run migrate: `scripts/ecs-migrate.sh` (or CI).
-10. Set `public_base_url` to `http://<alb_dns>` or set `domain_name` for HTTPS. Re-apply so `WEB_ORIGIN` / OAuth callback match.
-11. Update Shopify app URLs **only after HTTPS is verified**.
+10. Set `domain_name` and `public_base_url = "https://<hostname>"`. Apply, then follow [staging-https.md](staging-https.md) (new task IP → Route 53 A record → smoke HTTPS).
+11. Update Shopify app URLs **only after HTTPS is verified**, and **only if the hostname changed**.
 
 Production is the same layout with `deletion_protection = true`.
 
@@ -127,12 +127,12 @@ Do not destroy production from a script. Disable `deletion_protection` in a plan
 |--------|-----------|
 | `DATABASE_URL` (app role) | api, worker |
 | `MASTER_DATABASE_URL` | migrate task only |
-| `REDIS_URL` (`rediss://`) | api, worker |
+| `REDIS_URL` | local Compose only; unset in AWS |
 | `TOKEN_ENCRYPTION_KEY` | api, worker |
 | `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | api, worker |
 | `OPENAI_API_KEY` | worker only |
 
-Frontend receives no server secrets. `API_UPSTREAM` is a container env for the Next rewrite at **image build** time; behind the ALB, `/api/*` is routed to the API service.
+Frontend receives no server secrets. `API_UPSTREAM` is localhost for the Next server. Caddy routes `/api/*`, `/health`, and `/ready*` to the API container.
 
 ## IAM
 
@@ -173,24 +173,15 @@ Never log access tokens, passwords, API keys, or full sensitive payloads.
 
 ## Domain / TLS / Shopify
 
-If `domain_name` is set: ACM DNS validation, HTTPS listener, HTTP → HTTPS redirect. Cookie `Secure` is already on when `APP_ENV != dev`.
+Operator procedure: [staging-https.md](staging-https.md).
 
-Without a domain: use the ALB DNS over HTTP and treat Shopify OAuth as **blocked**. Do not weaken OAuth to make HTTP work.
+If `domain_name` is set: Caddy requests a Let's Encrypt certificate. Point a Route 53 **A** record at the current edge public IP (`scripts/edge-public-ip.sh`). The IP changes on replace; the hostname does not. Cookie `Secure` is already on when `APP_ENV != dev`.
+
+Without a domain: HTTP on the task public IP. Treat Shopify OAuth as **blocked**. Do not weaken OAuth to make HTTP work. Do not add Cloudflare or an ALB to work around this.
 
 ## Cost estimate (one always-on environment, us-east-1)
 
-| Item | Approx. monthly |
-|------|-----------------|
-| ALB + low LCU | $16–22 |
-| 3× Fargate ARM 0.25 vCPU / 0.5 GB | ~$27 |
-| 3× public IPv4 on tasks | ~$11 |
-| RDS `db.t4g.micro` + 20 GB gp3 | ~$13–15 |
-| ElastiCache `cache.t4g.micro` | ~$12 |
-| Secrets Manager + SQS + ECR + 7-day logs | ~$2–4 |
-| **Total** | **~$70–90** |
-| NAT Gateway (not deployed) | would add ~$32+ |
-
-$20–40/month is not realistic while keeping ALB + RDS + Redis + three services. Save money by destroying staging when idle, not by skipping encryption or exposing the database.
+See [aws-cost.md](aws-cost.md). **~$33–40/month**. No ALB, no NAT, no ElastiCache. Destroy staging when idle.
 
 ## Rollback
 

@@ -8,7 +8,7 @@ class WorkerSettings(BaseSettings):
     app_env: str = "dev"
     log_level: str = "INFO"
     database_url: str = "postgresql://merchantos:merchantos@localhost:5432/merchantos"
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str | None = None
     sqs_endpoint_url: str | None = None
     sqs_region: str = "us-east-1"
     sqs_queue_name: str = "merchantos-dev-jobs"

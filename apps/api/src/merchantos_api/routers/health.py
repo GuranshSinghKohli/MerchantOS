@@ -8,7 +8,7 @@ from redis import Redis
 from sqlalchemy import Engine
 
 from merchantos_api import __version__
-from merchantos_api.deps import db_engine, queue, redis_client
+from merchantos_api.deps import db_engine, queue, redis_client, settings
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -31,17 +31,20 @@ def ready(request: Request) -> JSONResponse:
         logger.warning("ready_postgres_failed")
         checks["postgres"] = False
 
-    try:
-        client: Redis = redis_client()
-        checks["redis"] = client.ping() is True
-    except Exception:
-        logger.warning("ready_redis_failed")
-        checks["redis"] = False
+    if settings().redis_url:
+        try:
+            client: Redis = redis_client()
+            checks["redis"] = client.ping() is True
+        except Exception:
+            logger.warning("ready_redis_failed")
+            checks["redis"] = False
+    else:
+        checks["redis"] = True
 
     payload: dict[str, Any] = {
         "status": "ok" if all(checks.values()) else "unavailable",
         "postgres": checks["postgres"],
-        "redis": checks["redis"],
+        "redis": checks["redis"] if settings().redis_url else "skipped",
         "request_id": getattr(request.state, "request_id", None),
     }
     status_code = 200 if payload["status"] == "ok" else 503

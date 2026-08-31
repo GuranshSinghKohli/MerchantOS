@@ -3,17 +3,16 @@ set -euo pipefail
 : "${CLUSTER:?}" "${TAG:?}" "${REGISTRY:?}" "${PREFIX:?}"
 REGION="${AWS_REGION:-us-east-1}"
 
-rewrite_family() {
+rewrite_images() {
   local family="$1"
   local service="$2"
-  local image="$REGISTRY/$PREFIX/$service:$TAG"
   local tmp
   tmp="$(mktemp)"
   aws ecs describe-task-definition --task-definition "$family" --region "$REGION" \
     --query 'taskDefinition' >"$tmp"
-  python3 - "$tmp" "$image" <<'PY'
+  python3 - "$tmp" "$REGISTRY" "$PREFIX" "$TAG" <<'PY'
 import json, sys
-path, image = sys.argv[1], sys.argv[2]
+path, registry, prefix, tag = sys.argv[1:5]
 data = json.load(open(path))
 for key in (
     "taskDefinitionArn",
@@ -25,7 +24,10 @@ for key in (
     "registeredBy",
 ):
     data.pop(key, None)
-data["containerDefinitions"][0]["image"] = image
+for container in data["containerDefinitions"]:
+    name = container["name"]
+    if name in {"api", "worker", "web", "caddy"}:
+        container["image"] = f"{registry}/{prefix}/{name}:{tag}"
 json.dump(data, open(path, "w"))
 PY
   aws ecs register-task-definition --region "$REGION" --cli-input-json "file://$tmp" >/dev/null
@@ -34,8 +36,7 @@ PY
   rm -f "$tmp"
 }
 
-rewrite_family "${PREFIX}-api" api
-rewrite_family "${PREFIX}-worker" worker
-rewrite_family "${PREFIX}-web" web
-aws ecs wait services-stable --region "$REGION" --cluster "$CLUSTER" --services api web worker
+rewrite_images "${PREFIX}-edge" edge
+rewrite_images "${PREFIX}-worker" worker
+aws ecs wait services-stable --region "$REGION" --cluster "$CLUSTER" --services edge worker
 echo "ecs deploy ok $TAG"

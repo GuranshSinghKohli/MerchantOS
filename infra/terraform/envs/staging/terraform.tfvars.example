@@ -3,6 +3,7 @@ enable_services  = false
 llm_provider     = "fake"
 github_repo      = "GuranshSinghKohli/MerchantOS"
 alarm_email      = ""
+# HTTPS hostname (Route 53 A → current edge IP). See docs/staging-https.md.
 domain_name      = ""
 public_base_url  = ""
 # shopify_api_key    = ""

@@ -20,7 +20,10 @@ def db_engine() -> Engine:
 
 @lru_cache
 def redis_client() -> Redis:
-    return Redis.from_url(settings().redis_url, decode_responses=True)
+    url = settings().redis_url
+    if not url:
+        raise RuntimeError("REDIS_URL is not configured")
+    return Redis.from_url(url, decode_responses=True)
 
 
 @lru_cache

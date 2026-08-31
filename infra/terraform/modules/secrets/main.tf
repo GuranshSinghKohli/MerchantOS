@@ -27,6 +27,7 @@ variable "app_db_password" {
 variable "redis_url" {
   type      = string
   sensitive = true
+  default   = ""
 }
 variable "shopify_api_key" {
   type      = string

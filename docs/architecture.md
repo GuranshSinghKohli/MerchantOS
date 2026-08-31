@@ -211,7 +211,7 @@ Errors: RFC 7807 `application/problem+json`.
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | GET | `/health` | none | Liveness |
-| GET | `/ready` | none | Postgres + Redis |
+| GET | `/ready` | none | Postgres; Redis only when `REDIS_URL` is set |
 | GET | `/api/v1/auth/shopify/install` | none | Start OAuth |
 | GET | `/api/v1/auth/shopify/callback` | none | Finish OAuth |
 | POST | `/api/v1/webhooks/shopify/{topic}` | HMAC | Ingress (incl. uninstall + GDPR) |
@@ -270,7 +270,7 @@ Financial metrics (revenue, AOV, margin, inventory quantities) are computed in a
 
 ## 12. AWS
 
-Target: ALB → ECS Fargate (api + worker + web) in **public subnets with task public IPs** (no NAT Gateway; [ADR 0024](adr/0024-cost-optimized-aws-network.md)) → private RDS PostgreSQL, private ElastiCache Redis, SQS + DLQ, Secrets Manager, CloudWatch, ACM when a domain exists, ECR. Terraform per environment (`dev` Compose with Postgres, Redis, and ElasticMQ; `staging`, `production`). No Kubernetes in V1 ([ADR 0006](adr/0006-ecs-fargate-not-kubernetes.md)). No pgvector until knowledge search is real.
+Target: Caddy on an `edge` Fargate task (public IP, no ALB, no NAT; [ADR 0024](adr/0024-cost-optimized-aws-network.md), [ADR 0025](adr/0025-portfolio-cost-envelope.md)) → API + web on localhost → private RDS PostgreSQL, SQS + DLQ, Secrets Manager, CloudWatch, ECR. Worker is a separate Fargate Spot service. No ElastiCache in AWS (Compose Redis remains for local `/ready`). Terraform per environment. No Kubernetes in V1 ([ADR 0006](adr/0006-ecs-fargate-not-kubernetes.md)). No pgvector until knowledge search is real.
 
 ## 13. Testing strategy
 
@@ -542,18 +542,16 @@ Do not start Phase 11 from this document.
 
 ## 25. Phase 10
 
-**Status:** IaC, images, CI, and observability are in-repo (2026-08-26). Live AWS apply, ECR push, HTTPS, and Shopify OAuth against a production URL are **operator-gated** and are not claimed complete.
+**Status:** Cost-redesigned 2026-08-29 ([ADR 0025](adr/0025-portfolio-cost-envelope.md), [aws-cost.md](aws-cost.md)). Live AWS apply remains operator-gated.
 
 ```
-Internet → ALB (HTTP, or HTTPS when domain_name is set)
-        ↙ api  /api/* /health /ready
-        ↘ web  default
-api/worker (Fargate, public subnet, public IP, no NAT)
-        → RDS (private) + Redis (private) + SQS + Secrets Manager
-worker  → Shopify GraphQL (allowlisted mutator only)
+Route 53 A → current edge public IPv4 → Caddy :80/:443 (Let's Encrypt)
+        → api :8000 and web :3000 on localhost
+worker (Fargate Spot, no inbound)
+        → RDS (private) + SQS + Secrets Manager
 ```
 
-Terraform-only IaC under `infra/terraform/`. Images are multi-stage, non-root, SHA-tagged. Migrations run as a one-off ECS task (`python -m merchantos_db.migrate`), not on API startup. Staging/production queues use `AwsSqsQueue` (task role; never create queues). Frontend never receives server secrets.
+No ALB, no NAT, no ElastiCache, no Cloudflare. Estimate **$33–40/month** for one environment. The task IP changes on every replace; update the A record ([staging-https.md](staging-https.md)). Shopify OAuth is valid only after HTTPS on that hostname. Destroy staging with `scripts/teardown-staging.sh` when idle.
 
-Shopify OAuth against AWS is valid only after an HTTPS origin exists. Destroy staging with `scripts/teardown-staging.sh` when idle.
+An ALB in front of Caddy is a later production option and needs a new ADR plus a cost update.
 

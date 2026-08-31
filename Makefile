@@ -42,6 +42,7 @@ image-build:
 	docker build -f apps/api/Dockerfile -t merchantos-api:local .
 	docker build -f apps/worker/Dockerfile -t merchantos-worker:local .
 	docker build -f apps/web/Dockerfile -t merchantos-web:local .
+	docker build -f infra/caddy/Dockerfile -t merchantos-caddy:local infra/caddy
 
 tf-validate:
 	terraform fmt -check -recursive infra/terraform

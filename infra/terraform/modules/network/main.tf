@@ -66,8 +66,8 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-resource "aws_security_group" "alb" {
-  name   = "${var.name}-alb"
+resource "aws_security_group" "edge" {
+  name   = "${var.name}-edge"
   vpc_id = aws_vpc.this.id
   ingress {
     from_port   = 80
@@ -89,28 +89,9 @@ resource "aws_security_group" "alb" {
   }
 }
 
-resource "aws_security_group" "ecs" {
-  name   = "${var.name}-ecs"
+resource "aws_security_group" "worker" {
+  name   = "${var.name}-worker"
   vpc_id = aws_vpc.this.id
-  ingress {
-    from_port       = 8000
-    to_port         = 8000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-  ingress {
-    from_port       = 3000
-    to_port         = 3000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-  ingress {
-    description = "Cloud Map web → api"
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-    self        = true
-  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -122,5 +103,6 @@ resource "aws_security_group" "ecs" {
 output "vpc_id" { value = aws_vpc.this.id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "private_subnet_ids" { value = aws_subnet.private[*].id }
-output "alb_security_group_id" { value = aws_security_group.alb.id }
-output "ecs_security_group_id" { value = aws_security_group.ecs.id }
+output "edge_security_group_id" { value = aws_security_group.edge.id }
+output "worker_security_group_id" { value = aws_security_group.worker.id }
+output "ecs_security_group_id" { value = aws_security_group.edge.id }

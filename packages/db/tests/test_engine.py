@@ -21,6 +21,20 @@ def test_uses_psycopg3_driver() -> None:
     )
 
 
+def test_production_urls_require_rds_tls(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    assert (
+        normalize_database_url("postgresql://merchantos_app:x@10.0.0.5:5432/merchantos")
+        == "postgresql+psycopg://merchantos_app:x@10.0.0.5:5432/merchantos?sslmode=require"
+    )
+    assert (
+        normalize_database_url(
+            "postgresql://merchantos_app:x@10.0.0.5:5432/merchantos?sslmode=disable"
+        )
+        == "postgresql+psycopg://merchantos_app:x@10.0.0.5:5432/merchantos?sslmode=disable"
+    )
+
+
 @pytest.mark.integration
 def test_postgres_connectivity() -> None:
     url = os.environ.get("DATABASE_URL")

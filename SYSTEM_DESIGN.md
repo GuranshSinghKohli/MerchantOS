@@ -901,7 +901,7 @@ Do not mix CDK or CloudFormation.
 
 Do not manually create production infrastructure unless documented and later codified.
 
-V1 network: no NAT Gateway; ECS tasks use public subnets and public IPs; RDS and Redis stay private ([ADR 0024](docs/adr/0024-cost-optimized-aws-network.md)).
+V1 network: no NAT Gateway and no ALB; the edge Fargate task is on a public IP behind Caddy. RDS stays private. ElastiCache is not deployed ([ADR 0024](docs/adr/0024-cost-optimized-aws-network.md), [ADR 0025](docs/adr/0025-portfolio-cost-envelope.md)).
 
 Infrastructure should be separated by environment:
 
@@ -1002,6 +1002,7 @@ docs/
   mcp.md
   database.md
   deployment.md
+  staging-https.md
   evaluation.md
   contracts.md
   architecture-remediation.md

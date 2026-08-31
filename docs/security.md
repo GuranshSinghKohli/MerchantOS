@@ -82,7 +82,7 @@ Phase 8: the intelligence graph inherits the same trusted tenant. Specialist out
 
 Phase 9: approval requires `TenantContext.from_session` and `session_bound=True`. `ApprovedAction` cannot be constructed from LLM output. Execution uses `ExecutionCapabilities` (mutator, no LLM) and typed `ShopifyMutator` methods only. Prompt text in titles or rationale is stored as data; it cannot change risk, tenant, or execute. Duplicate approve and duplicate queue delivery are idempotent.
 
-Phase 10: Terraform-only AWS. RDS and Redis are private. ECS tasks are in public subnets without NAT ([ADR 0024](adr/0024-cost-optimized-aws-network.md)); inbound is security-group limited to the ALB. Images are non-root and contain no secrets. Secrets Manager JSON is injected by the ECS execution role; the API task role cannot read Secrets Manager or the DLQ. GitHub deploys via OIDC on `main` only. Shopify OAuth URLs are not switched to AWS until HTTPS is verified.
+Phase 10: Terraform-only AWS. RDS is private. There is no ElastiCache. The `edge` task is in a public subnet without NAT ([ADR 0024](adr/0024-cost-optimized-aws-network.md), [ADR 0025](adr/0025-portfolio-cost-envelope.md)); inbound is 80/443 on Caddy only. The worker security group has no inbound rules. Images are non-root and contain no secrets. Secrets Manager JSON is injected by the ECS execution role; the API task role cannot read Secrets Manager or the DLQ. GitHub deploys via OIDC on `main` only. Shopify OAuth URLs are not switched to AWS until HTTPS is verified.
 
 ## Prompt injection
 

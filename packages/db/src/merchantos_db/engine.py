@@ -1,3 +1,4 @@
+import os
 from collections.abc import Generator
 from contextlib import contextmanager
 
@@ -6,11 +7,18 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def normalize_database_url(database_url: str) -> str:
-    """Force the psycopg3 driver. Bare postgresql:// defaults to missing psycopg2."""
+    """Force the psycopg3 driver. Bare postgresql:// defaults to missing psycopg2.
+
+    RDS requires TLS. Local Compose does not. Only production (ECS APP_ENV)
+    adds sslmode=require when the URL omitted it.
+    """
     if not database_url.startswith("postgresql"):
         raise ValueError("DATABASE_URL must be a PostgreSQL URL")
     if database_url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+        database_url = "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+    if "sslmode=" not in database_url and os.environ.get("APP_ENV") == "production":
+        joiner = "&" if "?" in database_url else "?"
+        database_url = f"{database_url}{joiner}sslmode=require"
     return database_url
 
 

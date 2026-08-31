@@ -9,5 +9,8 @@ task_arn="$(aws ecs run-task --region "$REGION" --cluster "$CLUSTER" --task-defi
 aws ecs wait tasks-stopped --region "$REGION" --cluster "$CLUSTER" --tasks "$task_arn"
 exit_code="$(aws ecs describe-tasks --region "$REGION" --cluster "$CLUSTER" --tasks "$task_arn" \
   --query 'tasks[0].containers[0].exitCode' --output text)"
-test "$exit_code" = "0"
+if [ "$exit_code" != "0" ]; then
+  echo "migrate failed task=$task_arn exit=$exit_code" >&2
+  exit 1
+fi
 echo "migrate ok"

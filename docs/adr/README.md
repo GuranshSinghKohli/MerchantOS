@@ -40,4 +40,5 @@ Index:
 | [0021](0021-mcp-read-permissions.md) | Resource-scoped MCP read permissions and Phase 5 tool catalog | Accepted |
 | [0022](0022-intelligence-reuses-agent-run.md) | Intelligence reuses AgentRun with run_kind | Accepted |
 | [0023](0023-phase9-human-approved-mutations.md) | Phase 9 human-approved product mutations | Accepted |
-| [0024](0024-cost-optimized-aws-network.md) | Cost-optimized AWS network (no NAT Gateway) | Accepted |
+| [0024](0024-cost-optimized-aws-network.md) | Cost-optimized AWS network (no NAT Gateway) | Accepted (ALB/Redis superseded by 0025) |
+| [0025](0025-portfolio-cost-envelope.md) | Portfolio cost envelope (no ALB, no ElastiCache) | Accepted |
