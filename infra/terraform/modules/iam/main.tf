@@ -116,11 +116,14 @@ data "aws_iam_policy_document" "github_assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        "repo:${var.github_repo}:ref:refs/heads/main",
-        "repo:${var.github_repo}:environment:staging",
-        "repo:${var.github_repo}:environment:production",
-      ]
+      values = concat(
+        [
+          "repo:${var.github_repo}:ref:refs/heads/main",
+          "repo:${var.github_repo}:environment:staging",
+          "repo:${var.github_repo}:environment:production",
+        ],
+        local.github_immutable_subs,
+      )
     }
   }
 }
@@ -132,8 +135,15 @@ resource "aws_iam_role" "github" {
 }
 
 locals {
-  account = data.aws_caller_identity.current.account_id
-  region  = var.region
+  account      = data.aws_caller_identity.current.account_id
+  region       = var.region
+  github_owner = try(split("/", var.github_repo)[0], "")
+  github_name  = try(split("/", var.github_repo)[1], "")
+  github_immutable_subs = var.github_repo == "" || local.github_name == "" ? [] : [
+    "repo:${local.github_owner}@*/${local.github_name}@*:ref:refs/heads/main",
+    "repo:${local.github_owner}@*/${local.github_name}@*:environment:staging",
+    "repo:${local.github_owner}@*/${local.github_name}@*:environment:production",
+  ]
 }
 
 resource "aws_iam_role_policy" "github" {
