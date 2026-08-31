@@ -1,21 +1,21 @@
 # Official Shopify app config.
 # https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
-# Replace client_id / URLs after creating the Partner / Dev Dashboard app.
-# Never put the client secret in this file.
+# Staging hostname is merchantos.duckdns.org. Never put the client secret here.
 
 name = "MerchantOS"
-client_id = "replace-with-dev-dashboard-client-id"
-application_url = "https://example.ngrok.app"
+client_id = "7ccdb79e26e19275533051e78f66a876"
+application_url = "https://merchantos.duckdns.org"
 embedded = false
 
 [access_scopes]
 # Re-validated against https://shopify.dev/docs/api/usage/access-scopes (2026-08-26).
 # write_products is limited to allowlisted product metadata mutations (Phase 9).
 scopes = "read_products,write_products,read_orders,read_customers,read_inventory,read_locations,read_discounts"
+use_legacy_install_flow = true
 
 [auth]
 redirect_urls = [
-  "https://example.ngrok.app/api/v1/auth/shopify/callback",
+  "https://merchantos.duckdns.org/api/v1/auth/shopify/callback",
 ]
 
 [webhooks]
