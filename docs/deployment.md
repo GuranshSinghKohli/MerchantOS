@@ -145,7 +145,7 @@ Frontend receives no server secrets. `API_UPSTREAM` is localhost for the Next se
 
 Pull requests (`.github/workflows/ci.yml`): ruff, mypy, pytest, web lint/typecheck/vitest, `terraform fmt` + `validate`.
 
-Main (`.github/workflows/deploy.yml`), only when `AWS_ROLE_ARN` is set:
+Main (`.github/workflows/deploy.yml`) deploys staging. Job `if` must not gate on environment `vars` — those are invisible until the job starts, which skipped the first push. Both jobs use `environment: staging`.
 
 1. Build `linux/arm64` images
 2. Trivy (CRITICAL/HIGH fail)

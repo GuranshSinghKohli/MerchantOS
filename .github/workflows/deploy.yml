@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   images:
-    if: ${{ vars.AWS_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
     environment: staging
     strategy:
@@ -51,7 +50,6 @@ jobs:
           docker push "$dest"
 
   migrate-and-deploy:
-    if: ${{ vars.AWS_ROLE_ARN != '' }}
     needs: images
     runs-on: ubuntu-latest
     environment: staging

@@ -114,29 +114,29 @@ module "iam" {
 }
 
 module "ecs" {
-  source                  = "../../modules/ecs"
-  name                    = local.name
-  public_subnet_ids       = module.network.public_subnet_ids
-  edge_security_group_id  = module.network.edge_security_group_id
+  source                   = "../../modules/ecs"
+  name                     = local.name
+  public_subnet_ids        = module.network.public_subnet_ids
+  edge_security_group_id   = module.network.edge_security_group_id
   worker_security_group_id = module.network.worker_security_group_id
-  execution_role_arn      = module.iam.execution_role_arn
-  api_role_arn            = module.iam.api_role_arn
-  worker_role_arn         = module.iam.worker_role_arn
-  api_image               = "${module.ecr.repository_urls["api"]}:${var.image_tag}"
-  worker_image            = "${module.ecr.repository_urls["worker"]}:${var.image_tag}"
-  web_image               = "${module.ecr.repository_urls["web"]}:${var.image_tag}"
-  caddy_image             = "${module.ecr.repository_urls["caddy"]}:${var.image_tag}"
-  secret_arn              = module.secrets.app_secret_arn
-  queue_name              = module.sqs.queue_name
-  queue_url               = module.sqs.queue_url
-  region                  = var.region
-  web_origin              = local.public_url
-  api_public_base_url     = local.public_url
-  shopify_redirect_uri    = "${local.public_url}/api/v1/auth/shopify/callback"
-  site_address            = local.site_address
-  desired_count           = 1
-  enable_services         = var.enable_services
-  llm_provider            = var.llm_provider
+  execution_role_arn       = module.iam.execution_role_arn
+  api_role_arn             = module.iam.api_role_arn
+  worker_role_arn          = module.iam.worker_role_arn
+  api_image                = "${module.ecr.repository_urls["api"]}:${var.image_tag}"
+  worker_image             = "${module.ecr.repository_urls["worker"]}:${var.image_tag}"
+  web_image                = "${module.ecr.repository_urls["web"]}:${var.image_tag}"
+  caddy_image              = "${module.ecr.repository_urls["caddy"]}:${var.image_tag}"
+  secret_arn               = module.secrets.app_secret_arn
+  queue_name               = module.sqs.queue_name
+  queue_url                = module.sqs.queue_url
+  region                   = var.region
+  web_origin               = local.public_url
+  api_public_base_url      = local.public_url
+  shopify_redirect_uri     = "${local.public_url}/api/v1/auth/shopify/callback"
+  site_address             = local.site_address
+  desired_count            = 1
+  enable_services          = var.enable_services
+  llm_provider             = var.llm_provider
 }
 
 module "observability" {

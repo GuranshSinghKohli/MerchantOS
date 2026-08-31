@@ -115,9 +115,9 @@ resource "aws_ecs_task_definition" "edge" {
       }
     },
     {
-      name      = "api"
-      image     = var.api_image
-      essential = true
+      name        = "api"
+      image       = var.api_image
+      essential   = true
       environment = local.common_env
       secrets = [
         for key in local.api_secret_keys : {
@@ -219,10 +219,10 @@ resource "aws_ecs_task_definition" "migrate" {
     cpu_architecture        = "ARM64"
   }
   container_definitions = jsonencode([{
-    name    = "migrate"
-    image   = var.api_image
+    name      = "migrate"
+    image     = var.api_image
     essential = true
-    command = ["python", "-m", "merchantos_db.migrate"]
+    command   = ["python", "-m", "merchantos_db.migrate"]
     environment = [
       { name = "APP_ENV", value = "production" },
       { name = "ALEMBIC_INI", value = "/app/packages/db/alembic.ini" },
