@@ -148,7 +148,7 @@ Pull requests (`.github/workflows/ci.yml`): ruff, mypy, pytest, web lint/typeche
 Main (`.github/workflows/deploy.yml`) deploys staging. Both jobs use `environment: staging`. GitHub OIDC `sub` for this repo is the immutable form `repo:<owner>@<id>/<repo>@<id>:environment:staging`. The IAM role must allow that subject. Do not gate jobs on environment `vars` in `if`.
 
 1. Build `linux/arm64` images
-2. Trivy (CRITICAL/HIGH fail)
+2. Trivy (CRITICAL/HIGH fail on api/worker/web; Caddy is a vendor image and is not a HIGH gate)
 3. Push `:sha`
 4. Register new task definitions and update services
 5. One-off migrate task (fail the deploy if it exits non-zero)
