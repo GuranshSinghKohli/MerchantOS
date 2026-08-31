@@ -154,7 +154,21 @@ Main (`.github/workflows/deploy.yml`), only when `AWS_ROLE_ARN` is set:
 5. One-off migrate task (fail the deploy if it exits non-zero)
 6. `scripts/smoke.sh` against `PUBLIC_URL` (`/health` + `/ready`)
 
-Configure GitHub environment `staging` vars after the first apply: `AWS_ROLE_ARN`, `AWS_REGION`, `ECR_REGISTRY`, `ECR_PREFIX`, `ECS_CLUSTER`, `ECS_SUBNETS`, `ECS_SECURITY_GROUP`, `MIGRATE_TASK_FAMILY`, `PUBLIC_URL`.
+Configure GitHub environment **`staging`** (Settings → Environments → `staging` → Environment variables), not repository secrets. Both deploy jobs read these vars. OIDC assumes `merchantos-staging-github` only for `main`.
+
+| Variable | Staging value |
+|----------|----------------|
+| `AWS_ROLE_ARN` | `terraform output -raw github_role_arn` |
+| `AWS_REGION` | `us-east-1` |
+| `ECR_REGISTRY` | `<account>.dkr.ecr.us-east-1.amazonaws.com` |
+| `ECR_PREFIX` | `merchantos-staging` |
+| `ECS_CLUSTER` | `merchantos-staging` |
+| `ECS_SUBNETS` | first public subnet from `terraform output -json public_subnet_ids` (no spaces) |
+| `ECS_SECURITY_GROUP` | `terraform output -raw ecs_security_group_id` |
+| `MIGRATE_TASK_FAMILY` | `merchantos-staging-migrate` |
+| `PUBLIC_URL` | `https://merchantos.duckdns.org` |
+
+After a CI deploy the edge IP changes. Update DuckDNS, then re-run smoke (`docs/staging-https.md`). A first `workflow_dispatch` is enough to test; do not apply production.
 
 ## Observability and alerts
 

@@ -13,6 +13,7 @@ jobs:
   images:
     if: ${{ vars.AWS_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
+    environment: staging
     strategy:
       fail-fast: true
       matrix:
