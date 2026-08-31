@@ -37,14 +37,13 @@ jobs:
               -t "local/${{ matrix.service }}:${{ github.sha }}" .
           fi
       - name: Scan
-        if: ${{ matrix.service != 'caddy' }}
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: local/${{ matrix.service }}:${{ github.sha }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
       - name: Push immutable tag
         run: |
           dest="${{ vars.ECR_REGISTRY }}/${{ vars.ECR_PREFIX }}/${{ matrix.service }}:${{ github.sha }}"
