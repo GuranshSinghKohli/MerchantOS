@@ -291,10 +291,13 @@ Every important operation carries `request_id`, `trace_id`, `agent_run_id`, `too
 
 ## 15. Open questions (not silently decided)
 
-- Demo mutation: reduce discount depth vs change a variant price (locks write scope).
-- AWS account, region (default `us-east-1` if unset), and whether staging is required before first Shopify install.
-- Production web hosting: **decided in Phase 10** — ECS Fargate `web` behind the same ALB.
-- Shopify Partner / Dev Dashboard app not created yet.
+- Demo mutation: reduce discount depth vs change a variant price (locks write scope). Phase 9 ships product-metadata writes only.
+
+Resolved in Phase 10 (do not reopen as open questions):
+
+- Region is `us-east-1`. Staging is required before production. Production apply stays operator-gated.
+- Web hosting is the `edge` Fargate task: Caddy terminates TLS and proxies to `web` and `api` on localhost. There is no ALB ([ADR 0025](adr/0025-portfolio-cost-envelope.md)).
+- The Shopify Dev Dashboard app exists (standalone, `use_legacy_install_flow = true`). Staging OAuth is verified on `https://merchantos.duckdns.org`.
 
 ## 16. Phase 1
 
@@ -342,7 +345,7 @@ Non-blocking: ElasticMQ Compose healthcheck is a no-op (`true`); application pro
 - `GET /api/v1/me` and `/api/v1/settings` (session cookie; no tokens)
 - Tables: merchants, stores, merchant_users, sessions, shopify_credentials, oauth_states, webhook_events, audit_events
 - Scopes: read-only V1 set; no write scopes until the demo mutation is locked
-- `shopify.app.toml`: `embedded = false`, mandatory compliance webhooks
+- `shopify.app.toml`: `embedded = false`, `use_legacy_install_flow = true`, mandatory compliance webhooks
 
 Out of Phase 2: product/order/customer/inventory sync, MCP, agents, LLM, mutations, Terraform.
 
@@ -542,7 +545,7 @@ Do not start Phase 11 from this document.
 
 ## 25. Phase 10
 
-**Status:** Cost-redesigned 2026-08-29 ([ADR 0025](adr/0025-portfolio-cost-envelope.md), [aws-cost.md](aws-cost.md)). Live AWS apply remains operator-gated.
+**Status:** Staging live 2026-08-31 ([ADR 0025](adr/0025-portfolio-cost-envelope.md), [aws-cost.md](aws-cost.md), [staging-https.md](staging-https.md)). HTTPS, `/ready`, and Shopify OAuth session are verified on the DuckDNS hostname. Production apply remains operator-gated.
 
 ```
 Route 53 A → current edge public IPv4 → Caddy :80/:443 (Let's Encrypt)
