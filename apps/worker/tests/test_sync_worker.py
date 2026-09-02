@@ -370,7 +370,9 @@ def test_missing_encryptor_fails_job_instead_of_hanging(postgres) -> None:
         assert job is not None
         assert job.status == "failed"
         assert store is not None
-        assert store.sync_status == "failed"
+        # Sibling resources are still queued; store stays running until they finish.
+        assert store.sync_status == "running"
+        assert store.sync_error is not None
 
 
 def test_stale_open_jobs_are_failed_so_import_can_restart(postgres) -> None:
