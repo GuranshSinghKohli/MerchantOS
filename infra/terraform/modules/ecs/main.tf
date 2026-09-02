@@ -26,6 +26,7 @@ variable "web_origin" { type = string }
 variable "api_public_base_url" { type = string }
 variable "shopify_redirect_uri" { type = string }
 variable "site_address" { type = string }
+variable "acme_email" { type = string }
 variable "desired_count" { type = number }
 variable "enable_services" { type = bool }
 variable "llm_provider" { type = string }
@@ -100,6 +101,17 @@ resource "aws_ecs_task_definition" "edge" {
       ]
       environment = [
         { name = "SITE_ADDRESS", value = var.site_address },
+        { name = "ACME_EMAIL", value = var.acme_email },
+        {
+          name  = "DUCKDNS_DOMAIN"
+          value = trimsuffix(replace(var.site_address, "https://", ""), ".duckdns.org")
+        },
+      ]
+      secrets = [
+        {
+          name      = "DUCKDNS_TOKEN"
+          valueFrom = "${var.secret_arn}:DUCKDNS_TOKEN::"
+        },
       ]
       dependsOn = [
         { containerName = "api", condition = "HEALTHY" },

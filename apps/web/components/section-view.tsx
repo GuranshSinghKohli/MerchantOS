@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { DateRangeBar } from "@/components/date-range-bar";
 import { ConnectStoreBoard, EmptyStoreBoard } from "@/components/empty-store";
@@ -21,7 +22,8 @@ import {
   isAuthError,
   isQueryReady,
 } from "@/lib/analytics";
-import { neverSynced, syncStatusLabel } from "@/lib/labels";
+import { neverSynced, syncInFlight, syncStatusLabel } from "@/lib/labels";
+import { fetchSyncStatus } from "@/lib/sync";
 import { useSessionStore } from "@/lib/use-session-store";
 
 function CustomRangePrompt({ title }: { title: string }) {
@@ -250,6 +252,7 @@ export function InsightsView() {
 
 export function SettingsView() {
   const session = useSessionStore();
+  const queryClient = useQueryClient();
   const request = useQuery({
     queryKey: ["settings", session.data?.store_id],
     queryFn: () =>
@@ -258,9 +261,18 @@ export function SettingsView() {
   });
   const sync = useQuery({
     queryKey: ["sync-status", session.data?.store_id],
-    queryFn: () => fetchJson<{ store_sync_status: string }>("/api/v1/store/sync"),
+    queryFn: fetchSyncStatus,
     enabled: Boolean(session.data?.store_id),
+    refetchInterval: (query) =>
+      syncInFlight(query.state.data?.store_sync_status ?? "") ? 1500 : false,
   });
+  useEffect(() => {
+    const status = sync.data?.store_sync_status;
+    if (status === "completed" || status === "failed") {
+      void queryClient.invalidateQueries({ queryKey: ["analytics-overview"] });
+      void queryClient.invalidateQueries({ queryKey: ["settings"] });
+    }
+  }, [queryClient, sync.data?.store_sync_status]);
   if (session.isLoading || request.isLoading) return <LoadingBoard />;
   if (session.isError) {
     if (isAuthError(session.error)) return <ConnectStoreBoard />;

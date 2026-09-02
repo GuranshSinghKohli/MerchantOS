@@ -78,7 +78,9 @@ function InstallForm() {
               />
             </label>
             <p id="shop-help" className="text-xs text-[hsl(var(--muted-foreground))]">
-              Use the myshopify.com domain, not a custom website URL.
+              Use the myshopify.com domain, not a custom website URL. Log into
+              Shopify Admin first. If Shopify shows “This store will be right
+              back”, do not retry that tab — start again from this page.
             </p>
             {error ? (
               <p role="alert" className="text-sm text-[hsl(var(--danger))]">

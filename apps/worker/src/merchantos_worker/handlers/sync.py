@@ -60,18 +60,17 @@ def handle_sync(
         store = jobs.get_store(store_id)
         since = store.last_synced_at if store is not None else None
 
-    access = load_store_access(
-        engine,
-        merchant_id=merchant_id,
-        store_id=store_id,
-        user_id=user_id,
-        request_id=request_id,
-        encryptor=encryptor,
-    )
-    query = incremental_query(since) if kind == "incremental" else None
-    captured_at = now.replace(microsecond=0)
-
     try:
+        access = load_store_access(
+            engine,
+            merchant_id=merchant_id,
+            store_id=store_id,
+            user_id=user_id,
+            request_id=request_id,
+            encryptor=encryptor,
+        )
+        query = incremental_query(since) if kind == "incremental" else None
+        captured_at = now.replace(microsecond=0)
         while True:
             page = _fetch_page(
                 reader,
@@ -85,7 +84,14 @@ def handle_sync(
                 commerce = CommerceRepository(db)
                 for item in page.items:
                     try:
-                        _apply_item(commerce, access.ctx, resource, item, captured_at)
+                        if not _apply_item(commerce, access.ctx, resource, item, captured_at):
+                            failed += 1
+                            logger.warning(
+                                "sync_record_skipped",
+                                resource=resource,
+                                job_id=str(job_id),
+                            )
+                            continue
                         processed += 1
                     except TransientJobError:
                         raise
@@ -122,7 +128,12 @@ def handle_sync(
     except Exception as exc:
         with session_scope(engine) as db:
             JobRepository(db).fail_sync(job_id, error=type(exc).__name__, now=datetime.now(UTC))
-        logger.warning("sync_failed", job_id=str(job_id), error_type=type(exc).__name__)
+        logger.warning(
+            "sync_failed",
+            job_id=str(job_id),
+            error_type=type(exc).__name__,
+            error_detail=str(exc)[:120],
+        )
 
 
 def _fetch_page(
@@ -154,21 +165,19 @@ def _apply_item(
     resource: str,
     item: object,
     captured_at: datetime,
-) -> None:
+) -> bool:
     if resource == "products" and isinstance(item, ProductRecord):
         apply_product(commerce, ctx, item)
-        return
+        return True
     if resource == "orders" and isinstance(item, OrderRecord):
         apply_order(commerce, ctx, item)
-        return
+        return True
     if resource == "customers" and isinstance(item, CustomerRecord):
         apply_customer(commerce, ctx, item)
-        return
+        return True
     if resource == "locations" and isinstance(item, LocationRecord):
         apply_location(commerce, ctx, item)
-        return
+        return True
     if resource == "inventory" and isinstance(item, InventoryRecord):
-        if not apply_inventory(commerce, ctx, item, captured_at):
-            raise TransientJobError("inventory missing variant or location")
-        return
+        return apply_inventory(commerce, ctx, item, captured_at)
     raise ValueError("unexpected sync item")

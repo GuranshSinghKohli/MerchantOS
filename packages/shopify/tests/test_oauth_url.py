@@ -8,7 +8,7 @@ def test_authorization_url_is_offline_grant() -> None:
         redirect_uri="https://app.example/api/v1/auth/shopify/callback",
         state="nonce-1",
     )
-    assert url.startswith("https://acme.myshopify.com/admin/oauth/authorize?")
+    assert url.startswith("https://admin.shopify.com/store/acme/oauth/authorize?")
     assert "client_id=key" in url
     assert "state=nonce-1" in url
     assert "grant_options" not in url

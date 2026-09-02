@@ -19,6 +19,7 @@ def authorization_url(
 ) -> str:
     """Standalone authorization-code grant. Offline token (no grant_options)."""
     domain = normalize_shop_domain(shop)
+    handle = domain.removesuffix(".myshopify.com")
     query = urlencode(
         {
             "client_id": client_id,
@@ -27,4 +28,8 @@ def authorization_url(
             "state": state,
         }
     )
-    return f"https://{domain}/admin/oauth/authorize?{query}"
+    # Unpublished / password-protected stores serve the storefront
+    # "This store will be right back" page on {shop}.myshopify.com/admin/oauth.
+    # Admin already lives on admin.shopify.com; authorize there with the same
+    # query string. Token exchange stays on the shop domain (server-to-server).
+    return f"https://admin.shopify.com/store/{handle}/oauth/authorize?{query}"

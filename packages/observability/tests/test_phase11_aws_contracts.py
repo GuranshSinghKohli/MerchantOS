@@ -25,6 +25,10 @@ def test_staging_network_is_least_privilege() -> None:
     assert "environment:staging" in iam
     assert "USER 65532" in (ROOT / "apps/api/Dockerfile").read_text()
     assert "HOSTNAME" in ecs
+    assert "DUCKDNS_TOKEN" in ecs
+    entry = (ROOT / "infra/caddy/docker-entrypoint.sh").read_text()
+    assert "duckdns.org/update" in entry
+    assert "ip=" in entry
 
 
 def test_github_oidc_is_not_admin() -> None:

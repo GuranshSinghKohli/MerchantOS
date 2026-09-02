@@ -2,6 +2,7 @@ import { fetchJson } from "@/lib/analytics";
 
 export type SyncStatus = {
   store_sync_status: string;
+  sync_error: string | null;
 };
 
 export function fetchSyncStatus(): Promise<SyncStatus> {

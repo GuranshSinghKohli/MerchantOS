@@ -57,6 +57,7 @@ def list_store_sync(
     with session_scope(engine) as db:
         identity = IdentityRepository(db).get_session(session_id, request_id, now=datetime.now(UTC))
         ctx = TenantContext.from_session(identity)
+        JobRepository(db).fail_stale_open_syncs(ctx, now=datetime.now(UTC))
         jobs = JobRepository(db).list_sync_jobs(ctx)
         store = JobRepository(db).get_store(ctx.store_id)
         return {

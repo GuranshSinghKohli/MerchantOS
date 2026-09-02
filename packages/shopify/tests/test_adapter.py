@@ -48,3 +48,83 @@ def test_exchange_and_shop_query_use_official_surfaces() -> None:
     assert shop.shopify_shop_gid == "gid://shopify/Shop/1"
     assert shop.myshopify_domain == "acme.myshopify.com"
     _ = datetime.now(UTC)
+
+
+def test_customers_page_falls_back_when_email_is_denied() -> None:
+    states = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        states["n"] += 1
+        if "defaultEmailAddress" in body:
+            return httpx.Response(
+                200,
+                json={
+                    "errors": [
+                        {
+                            "message": "Access denied for defaultEmailAddress field.",
+                            "extensions": {"code": "ACCESS_DENIED"},
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "customers": {
+                        "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        "edges": [
+                            {
+                                "node": {
+                                    "id": "gid://shopify/Customer/1",
+                                    "numberOfOrders": 2,
+                                    "state": "ENABLED",
+                                    "amountSpent": {"amount": "12.00"},
+                                }
+                            }
+                        ],
+                    }
+                }
+            },
+        )
+
+    adapter = ShopifyAdapter(
+        client_id="id",
+        client_secret="secret",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    page = adapter.fetch_customers_page(
+        "acme.myshopify.com", "tok", after=None, query=None, first=5
+    )
+    assert states["n"] == 2
+    assert len(page.items) == 1
+    assert page.items[0].shopify_gid == "gid://shopify/Customer/1"
+    assert page.items[0].email == ""
+
+
+def test_customers_page_empty_when_list_is_denied() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        _ = request
+        return httpx.Response(
+            200,
+            json={
+                "errors": [
+                    {
+                        "message": "Access denied for customers field.",
+                        "extensions": {"code": "ACCESS_DENIED"},
+                    }
+                ]
+            },
+        )
+
+    adapter = ShopifyAdapter(
+        client_id="id",
+        client_secret="secret",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    page = adapter.fetch_customers_page(
+        "acme.myshopify.com", "tok", after=None, query=None, first=5
+    )
+    assert page.items == ()
+    assert page.has_next is False

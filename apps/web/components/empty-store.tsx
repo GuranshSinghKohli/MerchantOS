@@ -22,16 +22,17 @@ export function EmptyStoreBoard({
       void client.invalidateQueries({ queryKey: ["sync-status"] });
     },
   });
-  const importing = syncInFlight(syncStatus) || importStore.isPending;
+  const inFlight = syncInFlight(syncStatus);
+  const importing = importStore.isPending;
   return (
     <Card>
       <CardContent className="grid gap-4 py-10 text-center">
         <div className="grid gap-2">
           <p className="text-sm font-medium">Import your Shopify store to see insights</p>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {shopDomain} is connected, but MerchantOS has not imported catalog and order data yet.
-            Numbers stay hidden until that import finishes so empty zeros are not mistaken for
-            real activity.
+            {syncStatus === "failed"
+              ? `${shopDomain} is connected, but the last import did not finish. Try Import again.`
+              : `${shopDomain} is connected, but MerchantOS has not imported catalog and order data yet. Numbers stay hidden until that import finishes so empty zeros are not mistaken for real activity.`}
           </p>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
             Import status: {syncStatusLabel(syncStatus)}
@@ -43,11 +44,21 @@ export function EmptyStoreBoard({
             onClick={() => importStore.mutate()}
             aria-busy={importing}
           >
-            {importing ? "Importing store data…" : "Import store data"}
+            {importing
+              ? "Importing store data…"
+              : inFlight
+                ? "Retry import"
+                : "Import store data"}
           </Button>
-          <Button variant="outline" asChild>
-            <Link href="/ask">Ask a question anyway</Link>
-          </Button>
+          {syncStatus === "failed" ? (
+            <Button variant="outline" asChild>
+              <Link href="/install">Install again</Link>
+            </Button>
+          ) : (
+            <Button variant="outline" asChild>
+              <Link href="/ask">Ask a question anyway</Link>
+            </Button>
+          )}
         </div>
         {importStore.isError ? (
           <p className="text-sm text-[hsl(var(--danger))]">

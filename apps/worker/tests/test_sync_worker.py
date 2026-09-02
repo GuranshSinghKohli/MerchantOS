@@ -327,6 +327,92 @@ def test_handle_sync_direct_uses_job_row_tenant(postgres) -> None:
         assert job.status == "completed"
 
 
+def test_inventory_skips_missing_variant_instead_of_retrying(postgres) -> None:
+    engine = postgres
+    reader = FakeShopifyReader()
+    with session_scope(engine) as db:
+        view = seed_installed_store(db, shop="inv-skip.myshopify.com", encryptor=_encryptor())
+        ctx = _ctx(view)
+        jobs = JobRepository(db).enqueue_sync(ctx, kind="initial", idempotency_prefix="is")
+        job_id = next(job.id for job in jobs if job.resource == "inventory")
+    handle_sync(
+        engine=engine,
+        reader=reader,
+        encryptor=_encryptor(),
+        job_id=job_id,
+        owner="inv-skip",
+    )
+    with session_scope(engine) as db:
+        job = JobRepository(db).get_sync_job(job_id)
+        assert job is not None
+        assert job.status == "completed"
+        assert job.records_processed == 0
+        assert job.records_failed >= 1
+
+
+def test_missing_encryptor_fails_job_instead_of_hanging(postgres) -> None:
+    engine = postgres
+    with session_scope(engine) as db:
+        view = seed_installed_store(db, shop="no-key.myshopify.com", encryptor=_encryptor())
+        ctx = _ctx(view)
+        jobs = JobRepository(db).enqueue_sync(ctx, kind="initial", idempotency_prefix="nk")
+        job_id = next(job.id for job in jobs if job.resource == "locations")
+    handle_sync(
+        engine=engine,
+        reader=FakeShopifyReader(),
+        encryptor=None,
+        job_id=job_id,
+        owner="no-key",
+    )
+    with session_scope(engine) as db:
+        job = JobRepository(db).get_sync_job(job_id)
+        store = JobRepository(db).get_store(view.store_id)
+        assert job is not None
+        assert job.status == "failed"
+        assert store is not None
+        assert store.sync_status == "failed"
+
+
+def test_stale_open_jobs_are_failed_so_import_can_restart(postgres) -> None:
+    engine = postgres
+    from datetime import UTC, datetime, timedelta
+
+    with session_scope(engine) as db:
+        view = seed_installed_store(db, shop="stale.myshopify.com", encryptor=_encryptor())
+        ctx = _ctx(view)
+        jobs = JobRepository(db).enqueue_sync(ctx, kind="initial", idempotency_prefix="st")
+        old = datetime.now(UTC) - timedelta(hours=2)
+        for job in jobs:
+            job.created_at = old
+            job.started_at = old
+            job.status = "running"
+        store = JobRepository(db).get_store(view.store_id)
+        assert store is not None
+        store.sync_status = "running"
+    with session_scope(engine) as db:
+        ctx = _ctx(view)
+        n = JobRepository(db).fail_stale_open_syncs(ctx, now=datetime.now(UTC))
+        assert n == 5
+        again = JobRepository(db).enqueue_sync(ctx, kind="initial", idempotency_prefix="st2")
+        assert len(again) == 5
+        assert {job.status for job in again} == {"pending"}
+
+
+def test_reenqueue_republishes_open_jobs(postgres) -> None:
+    engine = postgres
+    with session_scope(engine) as db:
+        view = seed_installed_store(db, shop="repub.myshopify.com", encryptor=_encryptor())
+        ctx = _ctx(view)
+        first = JobRepository(db).enqueue_sync(ctx, kind="initial", idempotency_prefix="rp")
+        first_ids = {job.id for job in first}
+        after_first = len(JobRepository(db).unpublished_outbox())
+        again = JobRepository(db).enqueue_sync(ctx, kind="initial", idempotency_prefix="rp")
+        assert {job.id for job in again} == first_ids
+        after_second = JobRepository(db).unpublished_outbox()
+        assert len(after_second) == after_first + len(first)
+        assert first_ids <= {row.job_id for row in after_second}
+
+
 def test_transient_error_type() -> None:
     with pytest.raises(TransientJobError):
         raise TransientJobError("x")

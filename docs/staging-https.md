@@ -23,6 +23,12 @@ Fargate assigns a **new public IPv4** when the edge task is replaced. That inclu
 - the task crashing or failing health checks
 - capacity replacement
 
+**Do not click “update ip” on duckdns.org from your laptop.** That writes *your home address* and breaks Let’s Encrypt. Close any DuckDNS desktop client.
+
+The Caddy container updates DuckDNS from the **task’s own public IP** before it asks Let’s Encrypt (`DUCKDNS_TOKEN` in Secrets Manager). After a recycle, wait for `duckdns_update_result=OK` in the Caddy log, then smoke HTTPS.
+
+If you still manage DNS by hand:
+
 Route 53 does **not** follow that IP. After every replace you must:
 
 1. Read the new IP (`scripts/edge-public-ip.sh`)

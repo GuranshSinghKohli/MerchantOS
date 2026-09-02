@@ -71,6 +71,14 @@ CUSTOMER_FIELDS = """
   amountSpent { amount }
 """
 
+# New apps often lack protected-customer-data access for email. Id and spend still sync.
+CUSTOMER_FIELDS_PUBLIC = """
+  id
+  numberOfOrders
+  state
+  amountSpent { amount }
+"""
+
 LOCATION_FIELDS = """
   id
   name
@@ -100,6 +108,15 @@ query CustomersPage($first: Int!, $after: String, $query: String) {{
   customers(first: $first, after: $after, query: $query) {{
     pageInfo {{ hasNextPage endCursor }}
     edges {{ node {{ {CUSTOMER_FIELDS} }} }}
+  }}
+}}
+"""
+
+CUSTOMERS_PAGE_PUBLIC = f"""
+query CustomersPagePublic($first: Int!, $after: String, $query: String) {{
+  customers(first: $first, after: $after, query: $query) {{
+    pageInfo {{ hasNextPage endCursor }}
+    edges {{ node {{ {CUSTOMER_FIELDS_PUBLIC} }} }}
   }}
 }}
 """

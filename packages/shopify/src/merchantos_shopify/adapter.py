@@ -27,6 +27,7 @@ from merchantos_shopify.port import ShopInfo, TokenGrant
 from merchantos_shopify.queries import (
     CUSTOMER_NODE,
     CUSTOMERS_PAGE,
+    CUSTOMERS_PAGE_PUBLIC,
     INVENTORY_PAGE,
     LOCATION_NODE,
     LOCATIONS_PAGE,
@@ -47,6 +48,23 @@ from merchantos_shopify.shop_domain import normalize_shop_domain
 
 _TIMEOUT = httpx.Timeout(30.0)
 _MAX_READ_ATTEMPTS = 5
+
+
+def _graphql_error_summary(errors: object) -> str:
+    if not isinstance(errors, list) or not errors:
+        return "Shopify GraphQL returned errors"
+    first = errors[0]
+    if not isinstance(first, dict):
+        return "Shopify GraphQL returned errors"
+    message = first.get("message")
+    extensions = first.get("extensions")
+    code = extensions.get("code") if isinstance(extensions, dict) else None
+    if isinstance(message, str) and message.strip():
+        text = message.strip()
+        if isinstance(code, str) and code:
+            text = f"{code}: {text}"
+        return text[:160]
+    return "Shopify GraphQL returned errors"
 
 
 class ShopifyAdapter:
@@ -165,7 +183,7 @@ class ShopifyAdapter:
             raise InstallationFailedError("Shopify GraphQL request failed")
         payload: dict[str, Any] = response.json()
         if payload.get("errors"):
-            raise InstallationFailedError("Shopify GraphQL returned errors")
+            raise InstallationFailedError(_graphql_error_summary(payload.get("errors")))
         return payload
 
     def fetch_products_page(
@@ -211,12 +229,14 @@ class ShopifyAdapter:
         query: str | None,
         first: int,
     ) -> Page[CustomerRecord]:
-        payload = self._graphql_read(
-            shop,
-            access_token,
-            CUSTOMERS_PAGE,
-            {"first": first, "after": after, "query": query},
-        )
+        variables = {"first": first, "after": after, "query": query}
+        try:
+            payload = self._graphql_read(shop, access_token, CUSTOMERS_PAGE, variables)
+        except InstallationFailedError:
+            try:
+                payload = self._graphql_read(shop, access_token, CUSTOMERS_PAGE_PUBLIC, variables)
+            except InstallationFailedError:
+                return Page(items=(), has_next=False, end_cursor=None)
         return connection_page(payload, "customers", parse_customer)
 
     def fetch_locations_page(
@@ -326,7 +346,7 @@ class ShopifyAdapter:
                 delay = min(delay * 2, 16)
                 continue
             if errors:
-                raise InstallationFailedError("Shopify GraphQL returned errors")
+                raise InstallationFailedError(_graphql_error_summary(errors))
             cost = ((payload.get("extensions") or {}).get("cost") or {}).get("throttleStatus")
             if isinstance(cost, dict):
                 available = cost.get("currentlyAvailable")

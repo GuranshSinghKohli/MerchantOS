@@ -134,6 +134,7 @@ module "ecs" {
   api_public_base_url      = local.public_url
   shopify_redirect_uri     = "${local.public_url}/api/v1/auth/shopify/callback"
   site_address             = local.site_address
+  acme_email               = var.alarm_email
   desired_count            = 1
   enable_services          = var.enable_services
   llm_provider             = var.llm_provider

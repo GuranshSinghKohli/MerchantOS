@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from merchantos_domain import JobKind, TenantContext
@@ -19,6 +19,8 @@ SYNC_RESOURCES: tuple[str, ...] = (
     "orders",
     "inventory",
 )
+
+STALE_SYNC = timedelta(minutes=15)
 
 
 @dataclass
@@ -42,6 +44,7 @@ class JobRepository:
         idempotency_prefix: str,
     ) -> list[SyncJob]:
         with tenant_scope(self._session, ctx.merchant_id):
+            self.fail_stale_open_syncs(ctx, now=datetime.now(UTC))
             existing = list(
                 self._session.scalars(
                     select(SyncJob).where(
@@ -53,6 +56,15 @@ class JobRepository:
                 )
             )
             if existing:
+                for job in existing:
+                    self._session.add(
+                        OutboxMessage(
+                            merchant_id=ctx.merchant_id,
+                            job_kind=JobKind.SYNC.value,
+                            job_id=job.id,
+                        )
+                    )
+                self._session.flush()
                 return existing
             jobs: list[SyncJob] = []
             for resource in SYNC_RESOURCES:
@@ -159,11 +171,37 @@ class JobRepository:
         job.finished_at = now
         job.lease_until = None
         job.error = error[:500]
+        self._refresh_store_status(job, now)
         store = self._session.get(Store, job.store_id)
         if store is not None and store.merchant_id == job.merchant_id:
-            store.sync_status = "failed"
             store.sync_error = job.error
         self._session.flush()
+
+    def fail_stale_open_syncs(
+        self,
+        ctx: TenantContext,
+        *,
+        now: datetime,
+        max_age: timedelta = STALE_SYNC,
+    ) -> int:
+        cutoff = now - max_age
+        with tenant_scope(self._session, ctx.merchant_id):
+            open_jobs = list(
+                self._session.scalars(
+                    select(SyncJob).where(
+                        SyncJob.merchant_id == ctx.merchant_id,
+                        SyncJob.store_id == ctx.store_id,
+                        SyncJob.status.in_(("pending", "running")),
+                    )
+                )
+            )
+            failed = 0
+            for job in open_jobs:
+                started = job.started_at or job.created_at
+                if started is not None and started <= cutoff:
+                    self.fail_sync(job.id, error="stale_sync_job", now=now)
+                    failed += 1
+            return failed
 
     def _refresh_store_status(self, job: SyncJob, now: datetime) -> None:
         store = self._session.get(Store, job.store_id)

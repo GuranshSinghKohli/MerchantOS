@@ -87,7 +87,7 @@ def test_oauth_initiation_persists_bound_state(postgres: None) -> None:
     fake = FakeShopify()
     with session_scope(db_engine()) as db:
         url = _service(db, fake).start_install("acme.myshopify.com")
-    assert url.startswith("https://acme.myshopify.com/admin/oauth/authorize?")
+    assert url.startswith("https://admin.shopify.com/store/acme/oauth/authorize?")
     assert "state=" in url
 
 

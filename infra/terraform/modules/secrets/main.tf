@@ -65,6 +65,7 @@ resource "aws_secretsmanager_secret_version" "app" {
     SHOPIFY_API_SECRET           = var.shopify_api_secret
     OPENAI_API_KEY               = var.openai_api_key
     TOKEN_ENCRYPTION_KEY_VERSION = "aws-v1"
+    DUCKDNS_TOKEN                = ""
   })
   lifecycle {
     ignore_changes = [secret_string]
