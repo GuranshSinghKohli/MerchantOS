@@ -1,9 +1,8 @@
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 from merchantos_llm.openai_adapter import openai_strict_schema
+from pydantic import BaseModel, Field
 
 
 class _Band(StrEnum):
