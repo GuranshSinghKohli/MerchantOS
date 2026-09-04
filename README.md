@@ -6,7 +6,7 @@ MerchantOS is a real Shopify app: official OAuth, encrypted tokens, Admin API re
 
 **The model recommends. The merchant approves. Deterministic code executes.**
 
-Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) · Architecture: [`docs/architecture.md`](docs/architecture.md) · Release: [`docs/FINAL_RELEASE.md`](docs/FINAL_RELEASE.md) · Demo: [`docs/demo.md`](docs/demo.md)
+**[Demo video (90s)](docs/MerchantOS-demo.mp4)** · Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) · Architecture: [`docs/architecture.md`](docs/architecture.md) · Release: [`docs/FINAL_RELEASE.md`](docs/FINAL_RELEASE.md) · Live walkthrough: [`docs/demo.md`](docs/demo.md)
 
 ## Problem
 
@@ -140,11 +140,11 @@ docs/             Architecture, ADRs, demo, release
 
 ADRs live in [`docs/adr/`](docs/adr/). Current ones that interviewers usually want: 0012 capability-isolated workers, 0013 proposal vs approval types, 0014 tenant from job row, 0021 MCP read permissions, 0023 human-approved mutations, 0025 portfolio cost envelope, 0026 eval/hardening, 0027 productization.
 
-## Screenshots and demo
+## Demo
 
-Walkthrough: [`docs/demo.md`](docs/demo.md). Capture screenshots from a real local or staging session after deploy — Overview, Ask MerchantOS, evidence, Approvals, and Actions. Do not paste invented KPI numbers.
+**[Watch the 90-second demo](docs/MerchantOS-demo.mp4)** — Ask → evidence-backed answer → merchant approval → worker execution. Recorded against the live staging app. The store had no paid orders; the answer says so. The approved title change failed on a rejected Shopify token and stayed on the audit trail.
 
-Staging may be empty until import. That empty state is the honest screenshot, not a fake dashboard.
+Operator walkthrough: [`docs/demo.md`](docs/demo.md). Do not paste invented KPI numbers. Staging may be empty until import — that empty state is honest, not a fake dashboard.
 
 ## Limitations
 
