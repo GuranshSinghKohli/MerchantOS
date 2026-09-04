@@ -1,6 +1,6 @@
 # MerchantOS demo (5–10 minutes)
 
-**[90-second demo video](MerchantOS-demo.mp4)**
+**[90-second demo video](https://guranshsinghkohli.github.io/MerchantOS/demo.html)**
 
 Staging hostname: `https://merchantos.duckdns.org`  
 Local: `http://localhost:3000` after `make api`, `make worker`, `make web`.

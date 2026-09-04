@@ -6,7 +6,7 @@ MerchantOS is a real Shopify app: official OAuth, encrypted tokens, Admin API re
 
 **The model recommends. The merchant approves. Deterministic code executes.**
 
-**[Demo video (90s)](docs/MerchantOS-demo.mp4)** · Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) · Architecture: [`docs/architecture.md`](docs/architecture.md) · Release: [`docs/FINAL_RELEASE.md`](docs/FINAL_RELEASE.md) · Live walkthrough: [`docs/demo.md`](docs/demo.md)
+**[Demo video (90s)](https://guranshsinghkohli.github.io/MerchantOS/demo.html)** · Canonical design: [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) · Architecture: [`docs/architecture.md`](docs/architecture.md) · Release: [`docs/FINAL_RELEASE.md`](docs/FINAL_RELEASE.md) · Live walkthrough: [`docs/demo.md`](docs/demo.md)
 
 ## Problem
 
@@ -142,7 +142,7 @@ ADRs live in [`docs/adr/`](docs/adr/). Current ones that interviewers usually wa
 
 ## Demo
 
-**[Watch the 90-second demo](docs/MerchantOS-demo.mp4)** — Ask → evidence-backed answer → merchant approval → worker execution. Recorded against the live staging app. The store had no paid orders; the answer says so. The approved title change failed on a rejected Shopify token and stayed on the audit trail.
+**[Watch the 90-second demo](https://guranshsinghkohli.github.io/MerchantOS/demo.html)** — Ask → evidence-backed answer → merchant approval → worker execution. Recorded against the live staging app. The store had no paid orders; the answer says so. The approved title change failed on a rejected Shopify token and stayed on the audit trail.
 
 Operator walkthrough: [`docs/demo.md`](docs/demo.md). Do not paste invented KPI numbers. Staging may be empty until import — that empty state is honest, not a fake dashboard.
 
